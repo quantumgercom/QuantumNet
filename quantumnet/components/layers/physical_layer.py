@@ -15,10 +15,8 @@ class PhysicalLayer:
         self.min_prob = 0.2
         self._physical_layer_id = physical_layer_id
         self._network = network
-        self._qubits = []
         self._failed_eprs = []
         self.created_eprs = []  # Lista para armazenar todos os EPRs criados
-        self._initial_qubits_fidelity = random.uniform(self.min_prob, self.max_prob)
         self._count_qubit = 0
         self._count_epr = 0
         self.logger = Logger.get_instance()
@@ -42,16 +40,7 @@ class PhysicalLayer:
             int: Id da camada física.
         """
         return self._physical_layer_id
-    
-    @property
-    def qubits(self):
-        """Retorna os qubits da camada física.
-        
-        Returns:
-            list: Lista de qubits da camada física.
-        """
-        return self._qubits
-    
+
     @property
     def failed_eprs(self):
         """Retorna os pares EPR que falharam.

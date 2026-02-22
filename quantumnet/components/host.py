@@ -2,16 +2,12 @@
 from ..objects import Logger, Qubit
 
 class Host():
-    def __init__(self, host_id: int, probability_on_demand_qubit_create: float = 0.5, probability_replay_qubit_create: float = 0.5, max_qubits_create: int = 10, memory_size: int = 10) -> None:
+    def __init__(self, host_id: int) -> None:
         # Sobre a rede
         self._host_id = host_id
         self._connections = []
         # Sobre o host
         self._memory = []
-        self._memory_size = memory_size
-        self._max_qubits_create = max_qubits_create
-        self._probability_on_demand_qubit_create = probability_on_demand_qubit_create
-        self._probability_replay_qubit_create = probability_replay_qubit_create
         self._routing_table = {}
         self._routing_table[host_id] = [host_id]
         # Sobre a execução

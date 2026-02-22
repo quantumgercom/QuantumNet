@@ -1,5 +1,4 @@
 import random
-import math
 
 class Qubit():
     def __init__(self, qubit_id: int, initial_fidelity: float = None) -> None:
@@ -10,9 +9,6 @@ class Qubit():
 
     def __str__(self):
         return f"Qubit {self.qubit_id} with state {self._qubit_state}"
-
-    def update_fidelity(self):
-        self._current_fidelity = random.uniform(0, 1)
 
     def get_initial_fidelity(self):
         return self._initial_fidelity

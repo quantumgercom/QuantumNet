@@ -5,7 +5,6 @@ class Controller():
     def __init__(self, network):
         self.network = network
         self.hosts = None
-        self.links = None
 
     def create_routing_table(self, host_id: int) -> dict:
         """

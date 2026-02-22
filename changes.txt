@@ -1,0 +1,77 @@
+================================================================================
+                  REGISTRO DE CODIGO NAO UTILIZADO REMOVIDO
+================================================================================
+
+Todos os itens abaixo foram verificados em todos os arquivos .py e em todos os
+12 notebooks .ipynb do repositorio. Somente codigo que nao era referenciado em
+nenhum lugar foi removido.
+
+================================================================================
+                               METODOS REMOVIDOS
+================================================================================
+
+1. TransportLayer.request_transmission(self, alice_id, bob_id, num_qubits)
+   Arquivo: quantumnet/components/layers/transport_layer.py (linhas 42-111)
+   Motivo: Nunca chamado em nenhum arquivo .py nem .ipynb.
+           O metodo run_transport_layer() e utilizado no lugar.
+
+2. TransportLayer.teleportation_protocol(self, alice_id, bob_id)
+   Arquivo: quantumnet/components/layers/transport_layer.py (linhas 113-186)
+   Motivo: Nunca chamado em nenhum arquivo .py nem .ipynb.
+           O metodo run_transport_layer() cobre a mesma funcionalidade.
+
+3. Qubit.update_fidelity(self)
+   Arquivo: quantumnet/objects/qubit.py (linhas 14-15)
+   Motivo: Nunca chamado em nenhum arquivo .py nem .ipynb.
+           O metodo set_current_fidelity() e utilizado no lugar.
+
+Bonus: Removido "import math" de qubit.py (nunca utilizado no arquivo).
+
+================================================================================
+                              ATRIBUTOS REMOVIDOS
+================================================================================
+
+--- Host (quantumnet/components/host.py) ---
+
+4. self._memory_size
+   Inicializado no __init__ via parametro memory_size, mas nunca lido.
+   O parametro memory_size tambem foi removido do construtor.
+
+5. self._max_qubits_create
+   Inicializado no __init__ via parametro max_qubits_create, mas nunca lido.
+   O parametro max_qubits_create tambem foi removido do construtor.
+
+6. self._probability_on_demand_qubit_create
+   Inicializado no __init__ via parametro, mas nunca lido.
+   O parametro probability_on_demand_qubit_create tambem foi removido do construtor.
+
+7. self._probability_replay_qubit_create
+   Inicializado no __init__ via parametro, mas nunca lido.
+   O parametro probability_replay_qubit_create tambem foi removido do construtor.
+
+--- Controller (quantumnet/components/controller.py) ---
+
+8. self.links
+   Inicializado como None no __init__, nunca atribuido valor e nunca lido.
+
+--- Network (quantumnet/components/network.py) ---
+
+9. self._topology
+   Inicializado como None no __init__ e atribuido em set_ready_topology(),
+   mas nunca lido em nenhum lugar (apenas escrito, write-only).
+   A atribuicao self._topology = topology_name em set_ready_topology()
+   tambem foi removida.
+
+10. self.count_qubit
+    Inicializado como 0 no __init__, nunca incrementado e nunca lido.
+    (A camada fisica usa seu proprio _count_qubit separadamente.)
+
+--- PhysicalLayer (quantumnet/components/layers/physical_layer.py) ---
+
+11. self._qubits + property qubits
+    Lista inicializada vazia no __init__, nunca populada.
+    A property qubits que retornava self._qubits tambem nunca era acessada.
+    Ambos foram removidos.
+
+12. self._initial_qubits_fidelity
+    Atribuido com random.uniform() no __init__, mas nunca lido em nenhum lugar.

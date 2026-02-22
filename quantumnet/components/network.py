@@ -13,7 +13,6 @@ class Network():
     def __init__(self) -> None:
         # Sobre a rede
         self._graph = nx.Graph()
-        self._topology = None
         self._hosts = {}
         # Camadas
         self._physical = PhysicalLayer(self)
@@ -23,7 +22,6 @@ class Network():
         self._application = ApplicationLayer(self, self._transport, self._network, self._link, self._physical)
         # Sobre a execução
         self.logger = Logger.get_instance()
-        self.count_qubit = 0
         #minimo e maximo
         self.max_prob = 1
         self.min_prob = 0.2
@@ -214,9 +212,6 @@ class Network():
             **args (int): Argumentos para a topologia. Geralmente, o número de hosts.
         
         """
-        # Nomeia a topologia da rede
-        self._topology = topology_name
-    
         # Cria o grafo da topologia escolhida
         if topology_name == 'Grade':
             if len(args) != 2:
