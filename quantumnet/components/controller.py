@@ -1,10 +1,12 @@
 import networkx as nx
 from ..components import Network, Host
+from ..objects import Logger
 
 class Controller():
     def __init__(self, network):
         self.network = network
         self.hosts = None
+        self.logger = Logger.get_instance()
 
     def create_routing_table(self, host_id: int) -> dict:
         """
@@ -53,9 +55,9 @@ class Controller():
         """
 
         if len(route) == 1:
-            print(f'Nó {route[0]} informado.')
+            self.logger.log(f'Nó {route[0]} informado.')
         for node in route[1:]:
-            print(f'Nó {node} informado.')
+            self.logger.log(f'Nó {node} informado.')
 
     def announce_to_alice_and_bob(self, route):
         """
@@ -64,5 +66,5 @@ class Controller():
             route (list): A list of nodes in the route.
         """
 
-        print(f"Alice {route[0]} e Bob {route[-1]} informados.")
+        self.logger.log(f"Alice {route[0]} e Bob {route[-1]} informados.")
 

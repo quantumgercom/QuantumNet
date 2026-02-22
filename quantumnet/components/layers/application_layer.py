@@ -3,21 +3,15 @@ from quantumnet.components import Host
 from quantumnet.objects import Qubit, Logger
 
 class ApplicationLayer:
-    def __init__(self, network, transport_layer, network_layer, link_layer, physical_layer):
+    def __init__(self, context, transport_layer):
         """
         Inicializa a camada de aplicação do protocolo QKD (Distribuição Quântica de Chaves).
 
         Args:
-            network: objeto que representa a rede quântica.
-            transport_layer: camada de transporte da rede.
-            network_layer: camada de rede da rede.
-            link_layer: camada de enlace da rede.
-            physical_layer: camada física da rede.
+            context (NetworkContext): Contexto compartilhado da rede.
+            transport_layer (TransportLayer): Camada de transporte da rede.
         """
-        self._network = network
-        self._physical_layer = physical_layer
-        self._network_layer = network_layer
-        self._link_layer = link_layer
+        self._context = context
         self._transport_layer = transport_layer
         self.logger = Logger.get_instance()
         self.used_qubits = 0
@@ -62,8 +56,8 @@ class ApplicationLayer:
         Returns:
             list: Lista de qubits preparados.
         """
-        self._network.clock.emit('e91_qubits_prepared', num_qubits=len(key))
-        self.logger.debug(f"Qubits E91 preparados no timeslot: {self._network.clock.now}")
+        self._context.clock.emit('e91_qubits_prepared', num_qubits=len(key))
+        self.logger.debug(f"Qubits E91 preparados no timeslot: {self._context.clock.now}")
         qubits = []
         for bit, base in zip(key, bases):
             qubit = Qubit(qubit_id=random.randint(0, 1000))  # Cria um novo qubit com ID aleatório
@@ -85,8 +79,8 @@ class ApplicationLayer:
         Returns:
             list: Resultados das medições.
         """
-        self._network.clock.emit('e91_measurement', num_qubits=len(qubits))
-        self.logger.debug(f"Medições E91 realizadas no timeslot: {self._network.clock.now}")
+        self._context.clock.emit('e91_measurement', num_qubits=len(qubits))
+        self.logger.debug(f"Medições E91 realizadas no timeslot: {self._context.clock.now}")
         results = []
         for qubit, base in zip(qubits, bases):
             if base == 1:
@@ -107,8 +101,8 @@ class ApplicationLayer:
         Returns:
             list: Chave final gerada pelo protocolo, ou None se houver falha na transmissão.
         """
-        alice = self._network.get_host(alice_id)  # Obtém o host de Alice
-        bob = self._network.get_host(bob_id)  # Obtém o host de Bob
+        alice = self._context.get_host(alice_id)  # Obtém o host de Alice
+        bob = self._context.get_host(bob_id)  # Obtém o host de Bob
 
         final_key = []  # Inicializa a chave final
 
@@ -129,8 +123,8 @@ class ApplicationLayer:
                 self.logger.log(f'Falha na transmissão dos qubits de Alice para Bob.')
                 return None
 
-            self._network.clock.tick()  # Rodada do protocolo E91 custa tempo
-            self.logger.debug(f"Rodada E91 concluída no timeslot: {self._network.clock.now}")
+            self._context.clock.tick()  # Rodada do protocolo E91 custa tempo
+            self.logger.debug(f"Rodada E91 concluída no timeslot: {self._context.clock.now}")
 
             # Etapa 3: Bob escolhe bases aleatórias e mede os qubits
             bases_bob = [random.choice([0, 1]) for _ in range(num_qubits)]  # Gera bases de medição aleatórias para Bob

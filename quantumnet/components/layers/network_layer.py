@@ -4,18 +4,16 @@ from quantumnet.objects import Logger, Epr
 from random import uniform
 
 class NetworkLayer:
-    def __init__(self, network, link_layer, physical_layer):
+    def __init__(self, context, physical_layer):
         """
         Inicializa a camada de rede.
-        
-        args:
-            network : Network : Rede.
-            link_layer : LinkLayer : Camada de enlace.
-            physical_layer : PhysicalLayer : Camada física.
+
+        Args:
+            context (NetworkContext): Contexto compartilhado da rede.
+            physical_layer (PhysicalLayer): Camada física.
         """
-        self._network = network
+        self._context = context
         self._physical_layer = physical_layer
-        self._link_layer = link_layer
         self.logger = Logger.get_instance()
         self.avg_size_routes = 0  # Inicializa o tamanho médio das rotas
         self.used_eprs = 0  # Inicializa o contador de EPRs utilizados
@@ -48,19 +46,19 @@ class NetworkLayer:
         returns:
             list or None: Lista com a melhor rota entre os hosts ou None se não houver rota válida.
         """
-        self._network.clock.emit('route_lookup', alice=Alice, bob=Bob)
-        self.logger.log(f'Timeslot {self._network.clock.now}: Buscando rota válida entre {Alice} e {Bob}.')
+        self._context.clock.emit('route_lookup', alice=Alice, bob=Bob)
+        self.logger.log(f'Timeslot {self._context.clock.now}: Buscando rota válida entre {Alice} e {Bob}.')
 
         if Alice is None or Bob is None:
             self.logger.log('IDs de hosts inválidos fornecidos.')
             return None
 
-        if not self._network.graph.has_node(Alice) or not self._network.graph.has_node(Bob):
+        if not self._context.graph.has_node(Alice) or not self._context.graph.has_node(Bob):
             self.logger.log(f'Um dos nós ({Alice} ou {Bob}) não existe no grafo.')
             return None
 
         try:
-            all_shortest_paths = list(nx.all_shortest_paths(self._network.graph, Alice, Bob))
+            all_shortest_paths = list(nx.all_shortest_paths(self._context.graph, Alice, Bob))
         except nx.NetworkXNoPath:
             self.logger.log(f'Sem rota encontrada entre {Alice} e {Bob}')
             return None
@@ -70,7 +68,7 @@ class NetworkLayer:
             for i in range(len(path) - 1):
                 node = path[i]
                 next_node = path[i + 1]
-                if len(self._network.get_eprs_from_edge(node, next_node)) < 1:
+                if len(self._context.get_eprs_from_edge(node, next_node)) < 1:
                     self.logger.log(f'Sem pares EPRs entre {node} e {next_node} na rota {path}')
                     valid_path = False
                     break
@@ -115,21 +113,21 @@ class NetworkLayer:
         # Itera sobre a rota realizando o entanglement swapping para cada segmento da rota
         while len(route) > 1:
             # Incrementa o timeslot antes de cada operação de entanglement swapping
-            self._network.clock.tick()
-            self.logger.log(f'Timeslot {self._network.clock.now}: Realizando Entanglement Swapping.')
+            self._context.clock.tick()
+            self.logger.log(f'Timeslot {self._context.clock.now}: Realizando Entanglement Swapping.')
 
             node1 = route[0]    # Primeiro nó na rota
             node2 = route[1]    # Segundo nó na rota
             node3 = route[2] if len(route) > 2 else None  # Terceiro nó na rota (se existir)
 
             # Verifica se existe um canal entre node1 e node2
-            if not self._network.graph.has_edge(node1, node2):
+            if not self._context.graph.has_edge(node1, node2):
                 self.logger.log(f'Canal entre {node1}-{node2} não existe')
                 return False
 
             try:
                 # Obtém o primeiro par EPR entre node1 e node2
-                epr1 = self._network.get_eprs_from_edge(node1, node2)[0]
+                epr1 = self._context.get_eprs_from_edge(node1, node2)[0]
             except IndexError:
                 # Se não houver pares EPR suficientes, loga a falha e retorna False
                 self.logger.log(f'Não há pares EPRs suficientes entre {node1}-{node2}')
@@ -138,13 +136,13 @@ class NetworkLayer:
             # Se houver um terceiro nó, realiza o swapping entre node1, node2 e node3
             if node3 is not None:
                 # Verifica se existe um canal entre node2 e node3
-                if not self._network.graph.has_edge(node2, node3):
+                if not self._context.graph.has_edge(node2, node3):
                     self.logger.log(f'Canal entre {node2}-{node3} não existe')
                     return False
 
                 try:
                     # Obtém o primeiro par EPR entre node2 e node3
-                    epr2 = self._network.get_eprs_from_edge(node2, node3)[0]
+                    epr2 = self._context.get_eprs_from_edge(node2, node3)[0]
                 except IndexError:
                     # Se não houver pares EPR suficientes, loga a falha e retorna False
                     self.logger.log(f'Não há pares EPRs suficientes entre {node2}-{node3}')
@@ -167,14 +165,14 @@ class NetworkLayer:
                 epr_virtual = Epr((node1, node3), new_fidelity)
 
                 # Se o canal entre node1 e node3 não existir, adiciona um novo canal
-                if not self._network.graph.has_edge(node1, node3):
-                    self._network.graph.add_edge(node1, node3, eprs=[])
+                if not self._context.graph.has_edge(node1, node3):
+                    self._context.graph.add_edge(node1, node3, eprs=[])
 
                 # Adiciona o par EPR virtual ao canal entre node1 e node3
-                self._network.physical.add_epr_to_channel(epr_virtual, (node1, node3))
+                self._physical_layer.add_epr_to_channel(epr_virtual, (node1, node3))
                 # Remove os pares EPR antigos dos canais entre node1-node2 e node2-node3
-                self._network.physical.remove_epr_from_channel(epr1, (node1, node2))
-                self._network.physical.remove_epr_from_channel(epr2, (node2, node3))
+                self._physical_layer.remove_epr_from_channel(epr1, (node1, node2))
+                self._physical_layer.remove_epr_from_channel(epr2, (node2, node3))
 
                 # Atualiza o contador de EPRs utilizados
                 self.used_eprs += 1
@@ -186,7 +184,7 @@ class NetworkLayer:
                 route.pop(1)
 
         # Loga o sucesso do entanglement swapping
-        self._network.clock.emit('entanglement_swapping_complete', alice=Alice, bob=Bob)
+        self._context.clock.emit('entanglement_swapping_complete', alice=Alice, bob=Bob)
         self.logger.log(f'Entanglement Swapping concluído com sucesso entre {Alice} e {Bob}')
         return True
 

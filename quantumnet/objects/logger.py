@@ -9,7 +9,7 @@ class Logger(object):
 
     def __init__(self):
             if Logger.__instance is None:
-                self.logger = logging.getLogger('qkdnet')
+                self.logger = logging.getLogger('QuantumNetLogger')
                 self.logger.setLevel(logging.DEBUG)
                 Logger.__instance = self
             else:

@@ -123,4 +123,4 @@ class Host():
         Informa ao controlador que a aplicação terminou.
         """
 
-        print(f'Host {self.host_id} informou ao controlador que a aplicação terminou.')
+        Logger.get_instance().log(f'Host {self.host_id} informou ao controlador que a aplicação terminou.')

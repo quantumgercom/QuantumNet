@@ -1,6 +1,8 @@
 import networkx as nx
 from ..objects import Logger, Qubit, Clock
+from ..config import SimulationConfig
 from ..components import Host
+from .network_context import NetworkContext
 from .layers import *
 import random
 import os
@@ -10,24 +12,25 @@ class Network():
     """
     Um objeto para utilizar como rede.
     """
-    def __init__(self, clock: 'Clock' = None) -> None:
+    def __init__(self, clock: 'Clock' = None, config: 'SimulationConfig' = None) -> None:
+        # Configuração da simulação
+        self.config = config if config is not None else SimulationConfig()
         # Relógio da simulação
         self.clock = clock if clock is not None else Clock()
         # Sobre a rede
         self._graph = nx.Graph()
         self._hosts = {}
-        # Camadas
-        self._physical = PhysicalLayer(self)
-        self._link = LinkLayer(self, self._physical)
-        self._network = NetworkLayer(self, self._link, self._physical)
-        self._transport = TransportLayer(self, self._network, self._link, self._physical)
-        self._application = ApplicationLayer(self, self._transport, self._network, self._link, self._physical)
         # Sobre a execução
         self.logger = Logger.get_instance()
-        #minimo e maximo
-        self.max_prob = 1
-        self.min_prob = 0.2
         self.qubit_timeslots = {}  # Dicionário para armazenar qubits criados e seus timeslots
+        # Contexto compartilhado entre as camadas (sem referência ao Network)
+        self._context = NetworkContext(self.clock, self._graph, self._hosts, self.qubit_timeslots, self.config)
+        # Camadas
+        self._physical = PhysicalLayer(self._context)
+        self._link = LinkLayer(self._context, self._physical)
+        self._network = NetworkLayer(self._context, self._physical)
+        self._transport = TransportLayer(self._context, self._network, self._physical)
+        self._application = ApplicationLayer(self._context, self._transport)
         # Registra decoerência como callback de tick
         self.clock.on_tick(self._decoherence_on_tick)
 
@@ -163,7 +166,7 @@ class Network():
         Returns:
             Host : O host com o host_id fornecido.
         """
-        return self._hosts[host_id]
+        return self._context.get_host(host_id)
 
     def get_eprs(self):
         """
@@ -188,8 +191,7 @@ class Network():
         Returns:
             list : Lista de EPRs da aresta.
         """
-        edge = (alice, bob)
-        return self._graph.edges[edge]['eprs']
+        return self._context.get_eprs_from_edge(alice, bob)
     
     def remove_epr(self, alice: int, bob: int) -> list:
         """
@@ -231,6 +233,8 @@ class Network():
 
         # Converte os labels dos nós para inteiros
         self._graph = nx.convert_node_labels_to_integers(self._graph)
+        # Atualiza a referência no contexto compartilhado
+        self._context.graph = self._graph
 
         # Cria os hosts e adiciona ao dicionário de hosts
         for node in self._graph.nodes():
@@ -239,45 +243,46 @@ class Network():
         self.start_channels()
         self.start_eprs()
     
-    def start_hosts(self, num_qubits: int = 10):
+    def start_hosts(self, num_qubits: int = None):
         """
         Inicializa os hosts da rede.
-        
+
         Args:
-            num_qubits (int): Número de qubits a serem inicializados.
+            num_qubits (int): Número de qubits a serem inicializados. Se None, usa config.
         """
+        if num_qubits is None:
+            num_qubits = self.config.defaults.qubits_per_host
         for host_id in self._hosts:
             for i in range(num_qubits):
                 self.physical.create_qubit(host_id, increment_qubits=False)
-        print("Hosts inicializados")    
+        self.logger.debug("Hosts inicializados")
 
     def start_channels(self):
         """
         Inicializa os canais da rede.
-        
-        Args:
-            prob_on_demand_epr_create (float): Probabilidade de criar um EPR sob demanda.
-            prob_replay_epr_create (float): Probabilidade de criar um EPR de replay.
         """
+        prob_cfg = self.config.probability
         for edge in self.edges:
-            self._graph.edges[edge]['prob_on_demand_epr_create'] = random.uniform(self.min_prob, self.max_prob)
-            self._graph.edges[edge]['prob_replay_epr_create'] = random.uniform(self.min_prob, self.max_prob)
+            self._graph.edges[edge]['prob_on_demand_epr_create'] = random.uniform(prob_cfg.epr_create_min, prob_cfg.epr_create_max)
+            self._graph.edges[edge]['prob_replay_epr_create'] = random.uniform(prob_cfg.epr_create_min, prob_cfg.epr_create_max)
             self._graph.edges[edge]['eprs'] = list()
-        print("Canais inicializados")
+        self.logger.debug("Canais inicializados")
         
-    def start_eprs(self, num_eprs: int = 10):
+    def start_eprs(self, num_eprs: int = None):
         """
         Inicializa os pares EPRs nas arestas da rede.
 
         Args:
-            num_eprs (int): Número de pares EPR a serem inicializados para cada canal.
+            num_eprs (int): Número de pares EPR a serem inicializados para cada canal. Se None, usa config.
         """
+        if num_eprs is None:
+            num_eprs = self.config.defaults.eprs_per_channel
         for edge in self.edges:
             for i in range(num_eprs):
                 epr = self.physical.create_epr_pair(increment_eprs=False)
                 self._graph.edges[edge]['eprs'].append(epr)
                 self.logger.debug(f'Par EPR {epr} adicionado ao canal.')
-        print("Pares EPRs adicionados")
+        self.logger.debug("Pares EPRs adicionados")
 
         
     def get_timeslot(self):
@@ -298,7 +303,7 @@ class Network():
             qubit_id (int): ID do qubit criado.
             layer_name (str): Nome da camada que criou o qubit.
         """
-        self.qubit_timeslots[qubit_id] = {'timeslot': self.clock.now, 'layer': layer_name}
+        self._context.register_qubit_creation(qubit_id, layer_name)
         
     def display_all_qubit_timeslots(self):
         """
@@ -306,10 +311,10 @@ class Network():
         Se nenhum qubit foi criado, exibe uma mensagem apropriada.
         """
         if not self.qubit_timeslots:
-            print("Nenhum qubit foi criado.")
+            self.logger.log("Nenhum qubit foi criado.")
         else:
             for qubit_id, info in self.qubit_timeslots.items():
-                print(f"Qubit {qubit_id} foi criado no timeslot {info['timeslot']} na camada {info['layer']}")
+                self.logger.log(f"Qubit {qubit_id} foi criado no timeslot {info['timeslot']} na camada {info['layer']}")
                 
                 
     def get_total_useds_eprs(self):
@@ -377,7 +382,7 @@ class Network():
             # Tratamento conforme o tipo de saída solicitado
             if output_type == "print":
                 for metric, value in metrics.items():
-                    print(f"{metric}: {value}")
+                    self.logger.log(f"{metric}: {value}")
             elif output_type == "csv":
                 current_directory = os.getcwd()
                 file_path = os.path.join(current_directory, file_name)
@@ -386,17 +391,18 @@ class Network():
                     writer.writerow(['Métrica', 'Valor'])
                     for metric, value in metrics.items():
                         writer.writerow([metric, value])
-                print(f"Métricas exportadas com sucesso para {file_path}")
+                self.logger.log(f"Métricas exportadas com sucesso para {file_path}")
             elif output_type == "variable":
                 return metrics
             else:
                 raise ValueError("Tipo de saída inválido. Escolha entre 'print', 'csv' ou 'variable'.")
 
-    def _decoherence_on_tick(self, clock, decoherence_factor: float = 0.9):
+    def _decoherence_on_tick(self, clock):
         """
         Callback de tick: aplica decoerência a todos os qubits e EPRs.
         Chamado automaticamente pelo clock a cada tick().
         """
+        decoherence_factor = self.config.decoherence.per_timeslot
         current_timeslot = clock.now
 
         # Aplicar decoerência nos qubits de cada host

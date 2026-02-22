@@ -1,0 +1,25 @@
+# Configuração padrão da simulação QuatumNet
+# Copie este arquivo e altere os valores para criar cenários customizados.
+
+decoherence:
+  per_timeslot: 0.9       # Fator de decoerência aplicado a cada tick do clock
+  per_measurement: 0.99    # Fator de decoerência aplicado a cada medição de fidelidade
+
+fidelity:
+  epr_threshold: 0.8                # Fidelidade mínima para considerar um EPR bem-sucedido (ECHP)
+  purification_threshold: 0.8       # Fidelidade mínima após purificação para aceitar o EPR
+  purification_min_probability: 0.5 # Probabilidade mínima para tentar purificação
+  initial_epr_fidelity: 1.0         # Fidelidade inicial padrão de um par EPR criado
+
+probability:
+  epr_create_max: 1.0   # Probabilidade máxima de criação de EPR nos canais
+  epr_create_min: 0.2   # Probabilidade mínima de criação de EPR nos canais
+
+protocol:
+  link_max_attempts: 2                  # Tentativas de emaranhamento antes de purificação
+  link_purification_after_failures: 2   # Número de falhas para acionar purificação
+  transport_max_attempts: 2             # Tentativas máximas de transmissão na camada de transporte
+
+defaults:
+  qubits_per_host: 10    # Qubits inicializados por host
+  eprs_per_channel: 10   # Pares EPR inicializados por canal
