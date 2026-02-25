@@ -20,6 +20,7 @@ class NetworkLayer:
         self.used_eprs = 0  # Initialize used EPRs counter
         self.used_qubits = 0  # Initialize used qubits counter
         self.routes_used = {}  # Initialize used routes dictionary
+
     def __str__(self):
         """ Return the string representation of the network layer.
 
@@ -86,108 +87,117 @@ class NetworkLayer:
         self.logger.log('No valid route found.')
         return None
 
-
-
-    def entanglement_swapping(self, Alice: int = None, Bob: int = None) -> bool:
+    def entanglement_swapping(self, Alice: int = None, Bob: int = None, on_complete=None):
         """
-        Perform Entanglement Swapping across the entire route determined by short_route_valid.
+        Schedule entanglement swapping across the shortest valid route. Fire-and-forget.
+
+        Result communicated via:
+          - 'entanglement_swapping_complete' event on success
+          - on_complete(success=True/False) callback if provided
 
         Args:
-            Alice (int, optional): Source host ID. If not provided, uses the first node of the valid route.
-            Bob (int, optional): Destination host ID. If not provided, uses the last node of the valid route.
-
-        Returns:
-            bool: True if all Entanglement Swappings succeeded, False otherwise.
+            Alice (int, optional): Source host ID.
+            Bob (int, optional): Destination host ID.
+            on_complete: Optional callback(success=bool).
         """
-        # Get valid route between Alice and Bob using short_route_valid
         route = self.short_route_valid(Alice, Bob)
 
-        # Check if a valid route was found and has at least 2 nodes
         if route is None or len(route) < 2:
             self.logger.log('Could not determine a valid route.')
-            return False
+            if on_complete is not None:
+                on_complete(success=False)
+            return
 
-        # Define Alice and Bob as the first and last nodes of the route
-        Alice = route[0]
-        Bob = route[-1]
+        alice = route[0]
+        bob = route[-1]
+        self._swap_next(route, alice, bob, on_complete)
 
-        # Iterate over the route performing entanglement swapping for each segment
-        while len(route) > 1:
-            # Increment timeslot before each entanglement swapping operation
-            self._context.clock.tick()
-            self.logger.log(f'Timeslot {self._context.clock.now}: Performing Entanglement Swapping.')
+    def _swap_next(self, route, alice, bob, on_complete):
+        """Schedule the next swap step, or finish if route is done."""
+        if len(route) <= 1:
+            self._context.clock.emit('entanglement_swapping_complete',
+                                      alice=alice, bob=bob)
+            self.logger.log(f'Entanglement Swapping completed successfully between {alice} and {bob}')
+            if on_complete is not None:
+                on_complete(success=True)
+            return
 
-            node1 = route[0]    # First node in route
-            node2 = route[1]    # Second node in route
-            node3 = route[2] if len(route) > 2 else None  # Third node in route (if exists)
+        cost = self._context.config.costs.swapping
+        self._context.clock.schedule(
+            cost, self._do_one_swap,
+            route=route, alice=alice, bob=bob, on_complete=on_complete
+        )
 
-            # Check if a channel exists between node1 and node2
-            if not self._context.graph.has_edge(node1, node2):
-                self.logger.log(f'Channel between {node1}-{node2} does not exist')
-                return False
+    def _do_one_swap(self, route, alice, bob, on_complete):
+        """Execute one entanglement swap at the scheduled timeslot."""
+        self.logger.log(f'Timeslot {self._context.clock.now}: Performing Entanglement Swapping.')
+
+        node1 = route[0]
+        node2 = route[1]
+        node3 = route[2] if len(route) > 2 else None
+
+        if not self._context.graph.has_edge(node1, node2):
+            self.logger.log(f'Channel between {node1}-{node2} does not exist')
+            if on_complete is not None:
+                on_complete(success=False)
+            return
+
+        try:
+            epr1 = self._context.get_eprs_from_edge(node1, node2)[0]
+        except IndexError:
+            self.logger.log(f'Not enough EPR pairs between {node1}-{node2}')
+            if on_complete is not None:
+                on_complete(success=False)
+            return
+
+        if node3 is not None:
+            if not self._context.graph.has_edge(node2, node3):
+                self.logger.log(f'Channel between {node2}-{node3} does not exist')
+                if on_complete is not None:
+                    on_complete(success=False)
+                return
 
             try:
-                # Get the first EPR pair between node1 and node2
-                epr1 = self._context.get_eprs_from_edge(node1, node2)[0]
+                epr2 = self._context.get_eprs_from_edge(node2, node3)[0]
             except IndexError:
-                # If there are not enough EPR pairs, log the failure and return False
-                self.logger.log(f'Not enough EPR pairs between {node1}-{node2}')
-                return False
+                self.logger.log(f'Not enough EPR pairs between {node2}-{node3}')
+                if on_complete is not None:
+                    on_complete(success=False)
+                return
 
-            # If there is a third node, perform swapping between node1, node2, and node3
-            if node3 is not None:
-                # Check if a channel exists between node2 and node3
-                if not self._context.graph.has_edge(node2, node3):
-                    self.logger.log(f'Channel between {node2}-{node3} does not exist')
-                    return False
+            fidelity1 = epr1.get_current_fidelity()
+            fidelity2 = epr2.get_current_fidelity()
 
-                try:
-                    # Get the first EPR pair between node2 and node3
-                    epr2 = self._context.get_eprs_from_edge(node2, node3)[0]
-                except IndexError:
-                    # If there are not enough EPR pairs, log the failure and return False
-                    self.logger.log(f'Not enough EPR pairs between {node2}-{node3}')
-                    return False
+            success_prob = fidelity1 * fidelity2 + (1 - fidelity1) * (1 - fidelity2)
 
-                # Measure fidelity of EPR pairs
-                fidelity1 = epr1.get_current_fidelity()
-                fidelity2 = epr2.get_current_fidelity()
+            if uniform(0, 1) > success_prob:
+                self.logger.log(f'Entanglement Swapping failed between {node1}-{node2} and {node2}-{node3}')
+                if on_complete is not None:
+                    on_complete(success=False)
+                return
 
-                # Calculate entanglement swapping success probability
-                success_prob = fidelity1 * fidelity2 + (1 - fidelity1) * (1 - fidelity2)
+            new_fidelity = (fidelity1 * fidelity2) / ((fidelity1 * fidelity2) + (1 - fidelity1) * (1 - fidelity2))
+            epr_virtual = Epr(
+                (node1, node3), new_fidelity,
+                clock=self._context.clock,
+                decoherence_rate=self._context.config.decoherence.per_timeslot
+            )
 
-                # Check if swapping succeeded based on success probability
-                if uniform(0, 1) > success_prob:
-                    self.logger.log(f'Entanglement Swapping failed between {node1}-{node2} and {node2}-{node3}')
-                    return False
+            if not self._context.graph.has_edge(node1, node3):
+                self._context.graph.add_edge(node1, node3, eprs=[])
 
-                # Calculate the new virtual EPR pair fidelity
-                new_fidelity = (fidelity1 * fidelity2) / ((fidelity1 * fidelity2) + (1 - fidelity1) * (1 - fidelity2))
-                epr_virtual = Epr((node1, node3), new_fidelity)
+            self._physical_layer.add_epr_to_channel(epr_virtual, (node1, node3))
+            self._physical_layer.remove_epr_from_channel(epr1, (node1, node2))
+            self._physical_layer.remove_epr_from_channel(epr2, (node2, node3))
 
-                # If the channel between node1 and node3 doesn't exist, add a new channel
-                if not self._context.graph.has_edge(node1, node3):
-                    self._context.graph.add_edge(node1, node3, eprs=[])
+            self.used_eprs += 1
 
-                # Add virtual EPR pair to the channel between node1 and node3
-                self._physical_layer.add_epr_to_channel(epr_virtual, (node1, node3))
-                # Remove old EPR pairs from channels between node1-node2 and node2-node3
-                self._physical_layer.remove_epr_from_channel(epr1, (node1, node2))
-                self._physical_layer.remove_epr_from_channel(epr2, (node2, node3))
+            route.pop(1)
+        else:
+            route.pop(1)
 
-                # Update used EPRs counter
-                self.used_eprs += 1
-
-                # Remove the second node from the route, as swapping was performed
-                route.pop(1)
-            else:
-                # If there's no third node, just remove the second node from the route
-                route.pop(1)
-
-        # Log entanglement swapping success
-        self._context.clock.emit('entanglement_swapping_complete', alice=Alice, bob=Bob)
-        self.logger.log(f'Entanglement Swapping completed successfully between {Alice} and {Bob}')
-        return True
+        # Continue to next swap
+        self._swap_next(route, alice, bob, on_complete)
 
     def get_avg_size_routes(self):
         """

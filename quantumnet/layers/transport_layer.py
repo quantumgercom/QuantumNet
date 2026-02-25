@@ -75,39 +75,70 @@ class TransportLayer:
         """
         return self.transmitted_qubits
 
-    def run_transport_layer(self, alice_id: int, bob_id: int, num_qubits: int):
+    def run_transport_layer(self, alice_id: int, bob_id: int, num_qubits: int, on_complete=None):
         """
-        Execute the transmission request and teleportation protocol.
+        Schedule the transmission request and teleportation protocol. Fire-and-forget.
+
+        Result communicated via:
+          - 'transport_complete' or 'transport_failed' event
+          - on_complete(success=True/False) callback if provided
 
         Args:
             alice_id (int): Alice host ID.
             bob_id (int): Bob host ID.
             num_qubits (int): Number of qubits to transmit.
-
-        Returns:
-            bool: True if the operation succeeded, False otherwise.
+            on_complete: Optional callback(success=bool).
         """
+        alice = self._context.get_host(alice_id)
+        available_qubits = len(alice.memory)
+
+        # If Alice has fewer qubits than needed, create more via scheduled chain
+        if available_qubits < num_qubits:
+            qubits_needed = num_qubits - available_qubits
+            self.logger.log(f'Insufficient qubits in Alice memory (Host {alice_id}). Creating {qubits_needed} more qubits to complete the {num_qubits} needed.')
+            self._create_qubits_chain(alice_id, bob_id, num_qubits, qubits_needed, 0, on_complete)
+        else:
+            # All qubits available, proceed directly to transmission
+            self._do_transmission(alice_id, bob_id, num_qubits, on_complete)
+
+    def _create_qubits_chain(self, alice_id, bob_id, num_qubits, total_to_create, created_so_far, on_complete):
+        """Schedule creation of one qubit, then chain to the next or to transmission."""
+        if created_so_far >= total_to_create:
+            # All qubits created, proceed to transmission
+            self._do_transmission(alice_id, bob_id, num_qubits, on_complete)
+            return
+
+        cost = self._context.config.costs.qubit_creation
+        self._context.clock.schedule(
+            cost, self._create_one_qubit,
+            alice_id=alice_id, bob_id=bob_id, num_qubits=num_qubits,
+            total_to_create=total_to_create, created_so_far=created_so_far,
+            on_complete=on_complete
+        )
+
+    def _create_one_qubit(self, alice_id, bob_id, num_qubits, total_to_create, created_so_far, on_complete):
+        """Create one qubit at the scheduled timeslot, then continue the chain."""
+        self._physical_layer.create_qubit(alice_id)
+        self.logger.log(f"Qubit created for Alice (Host {alice_id}) at timeslot: {self._context.clock.now}")
+
+        self._create_qubits_chain(
+            alice_id, bob_id, num_qubits, total_to_create,
+            created_so_far + 1, on_complete
+        )
+
+    def _do_transmission(self, alice_id, bob_id, num_qubits, on_complete):
+        """Execute the actual qubit transmission/teleportation logic."""
         alice = self._context.get_host(alice_id)
         bob = self._context.get_host(bob_id)
         available_qubits = len(alice.memory)
 
-        # If Alice has fewer qubits than needed, create more
+        # Ensure Alice has enough qubits
         if available_qubits < num_qubits:
-            qubits_needed = num_qubits - available_qubits
-            self.logger.log(f'Insufficient qubits in Alice memory (Host {alice_id}). Creating {qubits_needed} more qubits to complete the {num_qubits} needed.')
-
-            for _ in range(qubits_needed):
-                self._context.clock.tick()
-                self._physical_layer.create_qubit(alice_id)
-                self.logger.log(f"Qubit created for Alice (Host {alice_id}) at timeslot: {self._context.clock.now}")
-
-            # Update available qubits count after creation
-            available_qubits = len(alice.memory)
-
-        # Ensure Alice has exactly the required number of qubits after creation
-        if available_qubits != num_qubits:
-            self.logger.log(f'Error: Alice has {available_qubits} qubits, but should have {num_qubits} qubits. Aborting transmission.')
-            return False
+            self.logger.log(f'Error: Alice has {available_qubits} qubits, but needs {num_qubits}. Aborting transmission.')
+            self._context.clock.emit('transport_failed', alice=alice_id, bob=bob_id, delivered=0, requested=num_qubits)
+            if on_complete is not None:
+                on_complete(success=False)
+            return
 
         # Start qubit transmission
         max_attempts = self._context.config.protocol.transport_max_attempts
@@ -130,7 +161,6 @@ class TransportLayer:
                 for i in range(len(route) - 1):
                     node1 = route[i]
                     node2 = route[i + 1]
-
 
                     epr_pairs = self._context.get_eprs_from_edge(node1, node2)
                     if len(epr_pairs) == 0:
@@ -167,7 +197,7 @@ class TransportLayer:
                     qubit_alice.set_current_fidelity(F_final)
                     bob.memory.append(qubit_alice)
 
-                    # Increment qubit counter and timeslot
+                    # Increment qubit counter
                     success_count += 1
                     self.used_qubits += 1
                     self._context.clock.emit('qubit_teleported', alice=alice_id, bob=bob_id, fidelity=F_final)
@@ -184,8 +214,10 @@ class TransportLayer:
         if success_count == num_qubits:
             self._context.clock.emit('transport_complete', alice=alice_id, bob=bob_id, count=num_qubits)
             self.logger.log(f'Transmission and teleportation of {num_qubits} qubits between {alice_id} and {bob_id} completed successfully. Timeslot: {self._context.clock.now}')
-            return True
+            if on_complete is not None:
+                on_complete(success=True)
         else:
             self._context.clock.emit('transport_failed', alice=alice_id, bob=bob_id, delivered=success_count, requested=num_qubits)
             self.logger.log(f'Failed to transmit {num_qubits} qubits between {alice_id} and {bob_id}. Only {success_count} qubits were transmitted successfully. Timeslot: {self._context.clock.now}')
-            return False
+            if on_complete is not None:
+                on_complete(success=False)

@@ -1,10 +1,14 @@
+import heapq
+
+
 class Clock:
     """
-    Centralized clock for quantum network simulation.
+    Discrete-event simulation clock for quantum network simulation.
 
     Responsible for:
     - Tracking the current timeslot (now)
-    - Advancing time via tick(), firing registered callbacks
+    - Scheduling future events via schedule()
+    - Advancing time event-by-event via step(), or draining via run()
     - Recording events via emit(), without advancing time
     - Maintaining a complete event history (history)
     """
@@ -12,7 +16,8 @@ class Clock:
     def __init__(self):
         self._timeslot = 0
         self._history = []
-        self._on_tick_callbacks = []
+        self._event_queue = []   # min-heap: (timeslot, seq, callback, kwargs)
+        self._seq = 0            # FIFO tie-breaker for same-timeslot events
         self._event_callbacks = {}
 
     @property
@@ -25,18 +30,56 @@ class Clock:
         """Return the complete event history."""
         return list(self._history)
 
-    def tick(self, cost: int = 1):
+    def schedule(self, delay: int, callback, **kwargs):
         """
-        Advance time by 'cost' timeslots.
-        For each unit of advancement, fires all registered on_tick callbacks.
+        Schedule a callback to fire at (now + delay) timeslots.
+
+        Same-timeslot events execute in FIFO order (by insertion sequence).
 
         Args:
-            cost (int): Number of timeslots to advance. Default: 1.
+            delay (int): Non-negative number of timeslots from now.
+            callback: Callable to invoke. Signature: callback(**kwargs).
+            **kwargs: Arguments forwarded to the callback.
+
+        Raises:
+            ValueError: If delay is negative.
         """
-        for _ in range(cost):
-            self._timeslot += 1
-            for callback in self._on_tick_callbacks:
-                callback(self)
+        if delay < 0:
+            raise ValueError("delay must be >= 0")
+        time = self._timeslot + delay
+        heapq.heappush(self._event_queue, (time, self._seq, callback, kwargs))
+        self._seq += 1
+
+    def step(self) -> bool:
+        """
+        Advance time to the next scheduled timeslot and execute ALL events
+        at that timeslot in FIFO order.
+
+        Events scheduled during execution at the same timeslot (delay=0)
+        are also processed within this step.
+
+        Returns:
+            bool: True if at least one event was processed, False if queue empty.
+        """
+        if not self._event_queue:
+            return False
+
+        next_time = self._event_queue[0][0]
+        self._timeslot = next_time
+
+        while self._event_queue and self._event_queue[0][0] == next_time:
+            _, _, callback, kwargs = heapq.heappop(self._event_queue)
+            callback(**kwargs)
+
+        return True
+
+    def run(self):
+        """
+        Process all scheduled events until the queue is empty.
+        Equivalent to calling step() repeatedly.
+        """
+        while self.step():
+            pass
 
     def emit(self, event_name: str, **data):
         """
@@ -52,16 +95,6 @@ class Clock:
         if event_name in self._event_callbacks:
             for callback in self._event_callbacks[event_name]:
                 callback(self, **data)
-
-    def on_tick(self, callback):
-        """
-        Register a callback to be called on each tick.
-        The callback receives the clock as argument: callback(clock).
-
-        Args:
-            callback: Function to be called on each tick.
-        """
-        self._on_tick_callbacks.append(callback)
 
     def on(self, event_name: str, callback):
         """

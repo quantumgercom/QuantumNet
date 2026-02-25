@@ -1,8 +1,28 @@
+import math
 from ..utils import Logger
 from ..quantum import Qubit, Epr
 from ..topology import Host
 from random import uniform
 import random
+
+
+def _compute_ttl(initial_fidelity, decoherence_rate, threshold):
+    """
+    Compute time-to-live (timeslots until fidelity drops below threshold).
+
+    Returns:
+        int: Number of timeslots from creation to death.
+        None: If the entity never dies (no decoherence or rate >= 1.0).
+    """
+    if initial_fidelity <= threshold:
+        return 0
+    if decoherence_rate >= 1.0 or decoherence_rate <= 0.0:
+        return None
+    ttl = math.ceil(
+        math.log(threshold / initial_fidelity) / math.log(decoherence_rate)
+    )
+    return max(0, ttl)
+
 
 class PhysicalLayer:
     def __init__(self, context, physical_layer_id: int = 0):
@@ -75,7 +95,11 @@ class PhysicalLayer:
             raise Exception(f'Host {host_id} does not exist in the network.')
 
         qubit_id = self._count_qubit
-        qubit = Qubit(qubit_id)
+        qubit = Qubit(
+            qubit_id,
+            clock=self._context.clock,
+            decoherence_rate=self._context.config.decoherence.per_timeslot
+        )
         self._context.hosts[host_id].add_qubit(qubit)
 
         self._context.register_qubit_creation(qubit_id, "Physical Layer")
@@ -83,6 +107,20 @@ class PhysicalLayer:
         self._count_qubit += 1
         self._context.clock.emit('qubit_created', host_id=host_id, qubit_id=qubit_id)
         self.logger.debug(f'Qubit {qubit_id} created with initial fidelity {qubit.get_initial_fidelity()} and added to memory of Host {host_id}.')
+
+        # Schedule TTL death
+        ttl = _compute_ttl(
+            qubit.get_initial_fidelity(),
+            self._context.config.decoherence.per_timeslot,
+            self._context.config.decoherence.qubit_ttl_threshold
+        )
+        if ttl is not None and ttl > 0:
+            self._context.clock.schedule(
+                ttl, self._qubit_death_callback,
+                qubit=qubit, host_id=host_id
+            )
+        elif ttl == 0:
+            self._qubit_death_callback(qubit=qubit, host_id=host_id)
 
     def create_epr_pair(self, fidelity: float = 1.0, increment_eprs: bool = True):
         """Create an entangled qubit pair.
@@ -93,13 +131,17 @@ class PhysicalLayer:
         if increment_eprs:
             self.used_eprs += 1
 
-        epr = Epr(self._count_epr, fidelity)
+        epr = Epr(
+            self._count_epr, fidelity,
+            clock=self._context.clock,
+            decoherence_rate=self._context.config.decoherence.per_timeslot
+        )
         self._count_epr += 1
         self._context.clock.emit('epr_created', epr_id=epr.epr_id, fidelity=fidelity)
         return epr
 
     def add_epr_to_channel(self, epr: Epr, channel: tuple):
-        """Add an EPR pair to the channel.
+        """Add an EPR pair to the channel and schedule its TTL death.
 
         Args:
             epr (Epr): EPR pair.
@@ -110,6 +152,18 @@ class PhysicalLayer:
             self._context.graph.add_edge(u, v, eprs=[])
         self._context.graph.edges[u, v]['eprs'].append(epr)
         self.logger.debug(f'EPR pair {epr} added to channel {channel}.')
+
+        # Schedule TTL death
+        ttl = _compute_ttl(
+            epr.get_current_fidelity(),
+            self._context.config.decoherence.per_timeslot,
+            self._context.config.decoherence.epr_ttl_threshold
+        )
+        if ttl is not None and ttl > 0:
+            self._context.clock.schedule(
+                ttl, self._epr_death_callback,
+                epr=epr, channel=channel
+            )
 
     def remove_epr_from_channel(self, epr: Epr, channel: tuple):
         """Remove an EPR pair from the channel.
@@ -127,6 +181,36 @@ class PhysicalLayer:
             self.logger.debug(f'EPR pair {epr} removed from channel {channel}.')
         except ValueError:
             self.logger.debug(f'EPR pair {epr} not found in channel {channel}.')
+
+    def _qubit_death_callback(self, qubit, host_id):
+        """Remove an expired qubit from its host's memory (lazy deletion)."""
+        host = self._context.hosts.get(host_id)
+        if host is not None and qubit in host.memory:
+            host.memory.remove(qubit)
+            self._context.clock.emit(
+                'qubit_expired', qubit_id=qubit.qubit_id, host_id=host_id
+            )
+            self.logger.debug(
+                f'Qubit {qubit.qubit_id} expired and removed from Host {host_id} '
+                f'at timeslot {self._context.clock.now}.'
+            )
+
+    def _epr_death_callback(self, epr, channel):
+        """Remove an expired EPR from its channel (lazy deletion)."""
+        u, v = channel
+        try:
+            eprs_list = self._context.graph.edges[u, v]['eprs']
+            if epr in eprs_list:
+                eprs_list.remove(epr)
+                self._context.clock.emit(
+                    'epr_expired', epr_id=epr.epr_id, channel=channel
+                )
+                self.logger.debug(
+                    f'EPR {epr.epr_id} expired and removed from channel {channel} '
+                    f'at timeslot {self._context.clock.now}.'
+                )
+        except (KeyError, ValueError):
+            pass  # Channel or EPR already gone
 
     def fidelity_measurement_only_one(self, qubit: Qubit):
         """Measure the fidelity of a qubit.
@@ -157,13 +241,21 @@ class PhysicalLayer:
         self.logger.log(f'The fidelity between qubit {fidelity1} and qubit {fidelity2} is {combined_fidelity}')
         return combined_fidelity
 
-    def entanglement_creation_heralding_protocol(self, alice: Host, bob: Host):
-        """Entanglement creation heralding protocol.
+    def entanglement_creation_heralding_protocol(self, alice: Host, bob: Host, on_complete=None):
+        """Schedule entanglement creation heralding protocol. Fire-and-forget.
 
-        Returns:
-            bool: True if the protocol succeeded, False otherwise.
+        Result communicated via:
+          - 'echp_success' or 'echp_low_fidelity' event
+          - on_complete(success=True/False) callback if provided
         """
-        self._context.clock.tick()
+        cost = self._context.config.costs.heralding
+        self._context.clock.schedule(
+            cost, self._do_heralding,
+            alice=alice, bob=bob, on_complete=on_complete
+        )
+
+    def _do_heralding(self, alice, bob, on_complete=None):
+        """Execute heralding at the scheduled timeslot."""
         self.used_qubits += 2
 
         qubit1 = alice.get_last_qubit()
@@ -183,30 +275,37 @@ class PhysicalLayer:
         bob_host_id = bob.host_id
 
         if epr_fidelity >= self._context.config.fidelity.epr_threshold:
-            # If fidelity is adequate, add EPR to the network channel
-            self._context.graph.edges[(alice_host_id, bob_host_id)]['eprs'].append(epr)
+            self.add_epr_to_channel(epr, (alice_host_id, bob_host_id))
             self._context.clock.emit('echp_success', alice=alice_host_id, bob=bob_host_id, fidelity=epr_fidelity)
             self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement creation protocol succeeded with required fidelity.')
-            return True
+            success = True
         else:
-            # Add EPR to channel even with low fidelity
-            self._context.graph.edges[(alice_host_id, bob_host_id)]['eprs'].append(epr)
+            self.add_epr_to_channel(epr, (alice_host_id, bob_host_id))
             self._failed_eprs.append(epr)
             self._context.clock.emit('echp_low_fidelity', alice=alice_host_id, bob=bob_host_id, fidelity=epr_fidelity)
             self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement creation protocol succeeded, but with low fidelity.')
-            return False
+            success = False
 
-    def echp_on_demand(self, alice_host_id: int, bob_host_id: int):
-        """Protocol for recreating entanglement between qubits based on the on-demand EPR pair creation success probability.
+        if on_complete is not None:
+            on_complete(success=success)
+
+    def echp_on_demand(self, alice_host_id: int, bob_host_id: int, on_complete=None):
+        """Schedule on-demand ECHP. Fire-and-forget.
 
         Args:
             alice_host_id (int): Alice Host ID.
             bob_host_id (int): Bob Host ID.
-
-        Returns:
-            bool: True if the protocol succeeded, False otherwise.
+            on_complete: Optional callback(success=bool).
         """
-        self._context.clock.tick()
+        cost = self._context.config.costs.on_demand
+        self._context.clock.schedule(
+            cost, self._do_on_demand,
+            alice_host_id=alice_host_id, bob_host_id=bob_host_id,
+            on_complete=on_complete
+        )
+
+    def _do_on_demand(self, alice_host_id, bob_host_id, on_complete=None):
+        """Execute on-demand ECHP at the scheduled timeslot."""
         self.used_qubits += 2
 
         qubit1 = self._context.hosts[alice_host_id].get_last_qubit()
@@ -221,25 +320,35 @@ class PhysicalLayer:
         if uniform(0, 1) < echp_success_probability:
             self.logger.log(f'Timeslot {self._context.clock.now}: EPR pair created with fidelity {fidelity_qubit1 * fidelity_qubit2}')
             epr = self.create_epr_pair(fidelity_qubit1 * fidelity_qubit2)
-            self._context.graph.edges[alice_host_id, bob_host_id]['eprs'].append(epr)
+            self.add_epr_to_channel(epr, (alice_host_id, bob_host_id))
             self._context.clock.emit('echp_on_demand_success', alice=alice_host_id, bob=bob_host_id)
             self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability is {echp_success_probability}')
-            return True
-        self._context.clock.emit('echp_on_demand_failed', alice=alice_host_id, bob=bob_host_id)
-        self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability failed.')
-        return False
+            success = True
+        else:
+            self._context.clock.emit('echp_on_demand_failed', alice=alice_host_id, bob=bob_host_id)
+            self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability failed.')
+            success = False
 
-    def echp_on_replay(self, alice_host_id: int, bob_host_id: int):
-        """Protocol for recreating entanglement between qubits that were already losing their characteristics.
+        if on_complete is not None:
+            on_complete(success=success)
+
+    def echp_on_replay(self, alice_host_id: int, bob_host_id: int, on_complete=None):
+        """Schedule replay ECHP. Fire-and-forget.
 
         Args:
             alice_host_id (int): Alice Host ID.
             bob_host_id (int): Bob Host ID.
-
-        Returns:
-            bool: True if the protocol succeeded, False otherwise.
+            on_complete: Optional callback(success=bool).
         """
-        self._context.clock.tick()
+        cost = self._context.config.costs.replay
+        self._context.clock.schedule(
+            cost, self._do_on_replay,
+            alice_host_id=alice_host_id, bob_host_id=bob_host_id,
+            on_complete=on_complete
+        )
+
+    def _do_on_replay(self, alice_host_id, bob_host_id, on_complete=None):
+        """Execute replay ECHP at the scheduled timeslot."""
         self.used_qubits += 2
 
         qubit1 = self._context.hosts[alice_host_id].get_last_qubit()
@@ -254,10 +363,14 @@ class PhysicalLayer:
         if uniform(0, 1) < echp_success_probability:
             self.logger.log(f'Timeslot {self._context.clock.now}: EPR pair created with fidelity {fidelity_qubit1 * fidelity_qubit2}')
             epr = self.create_epr_pair(fidelity_qubit1 * fidelity_qubit2)
-            self._context.graph.edges[alice_host_id, bob_host_id]['eprs'].append(epr)
+            self.add_epr_to_channel(epr, (alice_host_id, bob_host_id))
             self._context.clock.emit('echp_on_replay_success', alice=alice_host_id, bob=bob_host_id)
             self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability is {echp_success_probability}')
-            return True
-        self._context.clock.emit('echp_on_replay_failed', alice=alice_host_id, bob=bob_host_id)
-        self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability failed.')
-        return False
+            success = True
+        else:
+            self._context.clock.emit('echp_on_replay_failed', alice=alice_host_id, bob=bob_host_id)
+            self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability failed.')
+            success = False
+
+        if on_complete is not None:
+            on_complete(success=success)

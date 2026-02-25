@@ -9,6 +9,8 @@ class DecoherenceConfig:
     """Decoherence parameters."""
     per_timeslot: float = 0.9
     per_measurement: float = 0.99
+    qubit_ttl_threshold: float = 0.1
+    epr_ttl_threshold: float = 0.1
 
 
 @dataclass
@@ -43,6 +45,18 @@ class DefaultsConfig:
 
 
 @dataclass
+class CostsConfig:
+    """Timeslot costs for DES operations."""
+    heralding: int = 1
+    on_demand: int = 1
+    replay: int = 1
+    purification: int = 1
+    swapping: int = 1
+    qubit_creation: int = 1
+    e91_round: int = 1
+
+
+@dataclass
 class SimulationConfig:
     """Centralized simulation configuration.
 
@@ -65,6 +79,7 @@ class SimulationConfig:
     probability: ProbabilityConfig = field(default_factory=ProbabilityConfig)
     protocol: ProtocolConfig = field(default_factory=ProtocolConfig)
     defaults: DefaultsConfig = field(default_factory=DefaultsConfig)
+    costs: CostsConfig = field(default_factory=CostsConfig)
 
     @classmethod
     def from_yaml(cls, path: str) -> 'SimulationConfig':
@@ -87,4 +102,5 @@ class SimulationConfig:
             probability=ProbabilityConfig(**data.get('probability', {})),
             protocol=ProtocolConfig(**data.get('protocol', {})),
             defaults=DefaultsConfig(**data.get('defaults', {})),
+            costs=CostsConfig(**data.get('costs', {})),
         )

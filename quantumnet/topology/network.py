@@ -33,8 +33,6 @@ class Network():
         self._network = NetworkLayer(self._context, self._physical)
         self._transport = TransportLayer(self._context, self._network, self._physical)
         self._application = ApplicationLayer(self._context, self._transport)
-        # Register decoherence as tick callback
-        self.clock.on_tick(self._decoherence_on_tick)
 
     @property
     def hosts(self):
@@ -282,8 +280,7 @@ class Network():
         for edge in self.edges:
             for i in range(num_eprs):
                 epr = self.physical.create_epr_pair(increment_eprs=False)
-                self._graph.edges[edge]['eprs'].append(epr)
-                self.logger.debug(f'EPR pair {epr} added to channel.')
+                self.physical.add_epr_to_channel(epr, edge)
         self.logger.debug("EPR pairs added")
 
 
@@ -398,29 +395,3 @@ class Network():
                 return metrics
             else:
                 raise ValueError("Invalid output type. Choose between 'print', 'csv', or 'variable'.")
-
-    def _decoherence_on_tick(self, clock):
-        """
-        Tick callback: apply decoherence to all qubits and EPRs.
-        Automatically called by the clock on each tick().
-        """
-        decoherence_factor = self.config.decoherence.per_timeslot
-        current_timeslot = clock.now
-
-        # Apply decoherence to qubits in each host
-        for host_id, host in self.hosts.items():
-            for qubit in host.memory:
-                if qubit.qubit_id in self.qubit_timeslots:
-                    creation_timeslot = self.qubit_timeslots[qubit.qubit_id]['timeslot']
-                    if creation_timeslot < current_timeslot:
-                        current_fidelity = qubit.get_current_fidelity()
-                        new_fidelity = current_fidelity * decoherence_factor
-                        qubit.set_current_fidelity(new_fidelity)
-
-        # Apply decoherence to EPRs in all channels (network edges)
-        for edge in self.edges:
-            if 'eprs' in self._graph.edges[edge]:
-                for epr in self._graph.edges[edge]['eprs']:
-                    current_fidelity = epr.get_current_fidelity()
-                    new_fidelity = current_fidelity * decoherence_factor
-                    epr.set_fidelity(new_fidelity)

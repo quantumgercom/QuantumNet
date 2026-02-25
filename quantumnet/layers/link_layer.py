@@ -46,61 +46,77 @@ class LinkLayer:
         self.logger.debug(f"Qubits used in layer {self.__class__.__name__}: {self.used_qubits}")
         return self.used_qubits
 
-    def request(self, alice_id: int, bob_id: int):
+    def request(self, alice_id: int, bob_id: int, on_complete=None):
         """
-        Request entanglement creation between Alice and Bob.
+        Schedule entanglement creation between Alice and Bob. Fire-and-forget.
+
+        Result communicated via:
+          - 'link_request_success' or 'link_request_failed' event
+          - on_complete(success=True/False) callback if provided
 
         Args:
             alice_id (int): Alice host ID.
             bob_id (int): Bob host ID.
+            on_complete: Optional callback(success=bool).
         """
+        self._start_attempt(alice_id, bob_id, attempt=1, on_complete=on_complete)
+
+    def _start_attempt(self, alice_id, bob_id, attempt, on_complete):
+        """Schedule the next heralding attempt or fall back to purification."""
+        max_attempts = self._context.config.protocol.link_max_attempts
+
+        if attempt > max_attempts:
+            # All attempts failed; try purification if enough failures accumulated
+            if len(self._failed_requests) >= self._context.config.protocol.link_purification_after_failures:
+                self.purification(alice_id, bob_id, on_complete=on_complete)
+            else:
+                # Transfer remaining EPRs
+                if self._physical_layer.created_eprs:
+                    self.created_eprs.extend(self._physical_layer.created_eprs)
+                    self._physical_layer.created_eprs.clear()
+                self._context.clock.emit('link_request_failed',
+                                          alice=alice_id, bob=bob_id)
+                if on_complete is not None:
+                    on_complete(success=False)
+            return
+
         try:
             alice = self._context.get_host(alice_id)
             bob = self._context.get_host(bob_id)
         except KeyError:
             self.logger.log(f'Host {alice_id} or {bob_id} not found in network.')
-            return False
+            if on_complete is not None:
+                on_complete(success=False)
+            return
 
-        for attempt in range(1, self._context.config.protocol.link_max_attempts + 1):
-            self._context.clock.emit('link_request_attempt', alice=alice_id, bob=bob_id, attempt=attempt)
-            self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement attempt between {alice_id} and {bob_id}.')
+        self._context.clock.emit('link_request_attempt',
+                                  alice=alice_id, bob=bob_id, attempt=attempt)
+        self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement attempt between {alice_id} and {bob_id}.')
 
-            entangle = self._physical_layer.entanglement_creation_heralding_protocol(alice, bob)
-
-            # After each entanglement attempt, transfer created EPRs to the link layer
-            if entangle:
+        # Define what happens when heralding completes
+        def on_heralding_done(success):
+            if success:
                 self.used_eprs += 1
                 self.used_qubits += 2
                 self._requests.append((alice_id, bob_id))
-
-                # Add EPRs created by the physical layer to the link layer's created EPRs list
                 if self._physical_layer.created_eprs:
                     self.created_eprs.extend(self._physical_layer.created_eprs)
-                    self._physical_layer.created_eprs.clear()  # Clear the physical layer's list
-
-                self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement created between {alice} and {bob} on attempt {attempt}.')
-                return True
+                    self._physical_layer.created_eprs.clear()
+                self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement created between {alice_id} and {bob_id} on attempt {attempt}.')
+                self._context.clock.emit('link_request_success',
+                                          alice=alice_id, bob=bob_id)
+                if on_complete is not None:
+                    on_complete(success=True)
             else:
-                self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement failed between {alice} and {bob} on attempt {attempt}.')
+                self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement failed between {alice_id} and {bob_id} on attempt {attempt}.')
                 self._failed_requests.append((alice_id, bob_id))
+                # Retry: schedule next attempt
+                self._start_attempt(alice_id, bob_id, attempt + 1, on_complete)
 
-        # Check if purification should be performed after two failures
-        if len(self._failed_requests) >= self._context.config.protocol.link_purification_after_failures:
-            purification_success = self.purification(alice_id, bob_id)
-
-            # Regardless of purification success, always transfer created EPRs
-            if self._physical_layer.created_eprs:
-                self.created_eprs.extend(self._physical_layer.created_eprs)
-                self._physical_layer.created_eprs.clear()  # Clear the physical layer's list
-
-            return purification_success
-
-        # After the second attempt, ensure all created EPRs are transferred
-        if self._physical_layer.created_eprs:
-            self.created_eprs.extend(self._physical_layer.created_eprs)
-            self._physical_layer.created_eprs.clear()  # Clear the physical layer's list
-
-        return False
+        # Schedule heralding (async, result comes via on_heralding_done)
+        self._physical_layer.entanglement_creation_heralding_protocol(
+            alice, bob, on_complete=on_heralding_done
+        )
 
     def purification_calculator(self, f1: int, f2: int, purification_type: int) -> float:
         """
@@ -133,23 +149,32 @@ class LinkLayer:
         self.logger.log('Purification only accepts values (1, 2, or 3), formula 1 was chosen by default.')
         return f1f2 / ((f1f2) + ((1 - f1) * (1 - f2)))
 
-
-    def purification(self, alice_id: int, bob_id: int, purification_type: int = 1):
+    def purification(self, alice_id: int, bob_id: int, purification_type: int = 1, on_complete=None):
         """
-        EPR purification.
+        Schedule EPR purification. Fire-and-forget.
 
         Args:
             alice_id (int): Alice host ID.
             bob_id (int): Bob host ID.
             purification_type (int): Purification protocol type.
+            on_complete: Optional callback(success=bool).
         """
-        self._context.clock.tick()
+        cost = self._context.config.costs.purification
+        self._context.clock.schedule(
+            cost, self._do_purification,
+            alice_id=alice_id, bob_id=bob_id,
+            purification_type=purification_type, on_complete=on_complete
+        )
 
+    def _do_purification(self, alice_id, bob_id, purification_type, on_complete):
+        """Execute purification at the scheduled timeslot."""
         eprs_fail = self._physical_layer.failed_eprs
 
         if len(eprs_fail) < 2:
             self.logger.log(f'Timeslot {self._context.clock.now}: Not enough EPRs for purification on channel ({alice_id}, {bob_id}).')
-            return False
+            if on_complete is not None:
+                on_complete(success=False)
+            return
 
         eprs_fail1 = eprs_fail[-1]
         eprs_fail2 = eprs_fail[-2]
@@ -162,30 +187,41 @@ class LinkLayer:
         self.used_eprs += 2
         self.used_qubits += 4
 
+        success = False
         if purification_prob > self._context.config.fidelity.purification_min_probability:
             new_fidelity = self.purification_calculator(f1, f2, purification_type)
 
             if new_fidelity > self._context.config.fidelity.purification_threshold:
-                epr_purified = Epr((alice_id, bob_id), new_fidelity)
+                epr_purified = Epr(
+                    (alice_id, bob_id), new_fidelity,
+                    clock=self._context.clock,
+                    decoherence_rate=self._context.config.decoherence.per_timeslot
+                )
                 self._physical_layer.add_epr_to_channel(epr_purified, (alice_id, bob_id))
                 self._physical_layer.failed_eprs.remove(eprs_fail1)
                 self._physical_layer.failed_eprs.remove(eprs_fail2)
                 self.logger.log(f'Used EPRs {self.used_eprs}')
                 self._context.clock.emit('purification_success', alice=alice_id, bob=bob_id, fidelity=new_fidelity)
                 self.logger.log(f'Timeslot {self._context.clock.now}: Purification succeeded on channel ({alice_id}, {bob_id}) with new fidelity {new_fidelity}.')
-                return True
+                success = True
             else:
                 self._physical_layer.failed_eprs.remove(eprs_fail1)
                 self._physical_layer.failed_eprs.remove(eprs_fail2)
                 self._context.clock.emit('purification_failed', alice=alice_id, bob=bob_id, reason='low_fidelity')
                 self.logger.log(f'Timeslot {self._context.clock.now}: Purification failed on channel ({alice_id}, {bob_id}) due to low fidelity after purification.')
-                return False
         else:
             self._physical_layer.failed_eprs.remove(eprs_fail1)
             self._physical_layer.failed_eprs.remove(eprs_fail2)
             self._context.clock.emit('purification_failed', alice=alice_id, bob=bob_id, reason='low_probability')
             self.logger.log(f'Timeslot {self._context.clock.now}: Purification failed on channel ({alice_id}, {bob_id}) due to low purification success probability.')
-            return False
+
+        # Transfer created EPRs
+        if self._physical_layer.created_eprs:
+            self.created_eprs.extend(self._physical_layer.created_eprs)
+            self._physical_layer.created_eprs.clear()
+
+        if on_complete is not None:
+            on_complete(success=success)
 
     def avg_fidelity_on_linklayer(self):
         """
