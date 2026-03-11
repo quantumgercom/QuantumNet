@@ -18,7 +18,8 @@ class LinkLayer:
         self._requests = []
         self._failed_request_count = 0
         self.logger = Logger.get_instance()
-        self.created_eprs = []  # Store EPRs created by the physical layer
+        self._epr_fidelity_sum = 0.0
+        self._epr_count = 0
 
     @property
     def requests(self):
@@ -60,10 +61,6 @@ class LinkLayer:
             if failures >= self._context.config.protocol.link_purification_after_failures:
                 self.purification(alice_id, bob_id, on_complete=on_complete)
             else:
-                # Transfer remaining EPRs
-                if self._physical_layer.created_eprs:
-                    self.created_eprs.extend(self._physical_layer.created_eprs)
-                    self._physical_layer.created_eprs.clear()
                 self._context.clock.emit('link_request_failed',
                                           alice=alice_id, bob=bob_id)
                 if on_complete is not None:
@@ -84,14 +81,14 @@ class LinkLayer:
         self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement attempt between {alice_id} and {bob_id}.')
 
         # Define what happens when heralding completes
-        def on_heralding_done(success):
+        def on_heralding_done(success, epr_fidelity=None):
             if success:
                 self.logger.log(f'{self.__class__.__name__}: 1 EPR used')
                 self.logger.log(f'{self.__class__.__name__}: 2 qubits used')
                 self._requests.append((alice_id, bob_id))
-                if self._physical_layer.created_eprs:
-                    self.created_eprs.extend(self._physical_layer.created_eprs)
-                    self._physical_layer.created_eprs.clear()
+                if epr_fidelity is not None:
+                    self._epr_fidelity_sum += epr_fidelity
+                    self._epr_count += 1
                 self.logger.log(f'Timeslot {self._context.clock.now}: Entanglement created between {alice_id} and {bob_id} on attempt {attempt}.')
                 self._context.clock.emit('link_request_success',
                                           alice=alice_id, bob=bob_id)
@@ -203,11 +200,6 @@ class LinkLayer:
             self._context.clock.emit('purification_failed', alice=alice_id, bob=bob_id, reason='low_probability')
             self.logger.log(f'Timeslot {self._context.clock.now}: Purification failed on channel ({alice_id}, {bob_id}) due to low purification success probability.')
 
-        # Transfer created EPRs
-        if self._physical_layer.created_eprs:
-            self.created_eprs.extend(self._physical_layer.created_eprs)
-            self._physical_layer.created_eprs.clear()
-
         if on_complete is not None:
             on_complete(success=success)
 
@@ -218,19 +210,12 @@ class LinkLayer:
         Returns:
             float: Average fidelity of link layer EPRs.
         """
-        total_fidelity = 0
-        total_eprs = len(self.created_eprs)
-
-        for epr in self.created_eprs:
-            total_fidelity += epr.current_fidelity
-
-        if total_eprs == 0:
+        if self._epr_count == 0:
             self.logger.log('No EPRs created in the link layer.')
             return 0
 
-
-        self.logger.debug(f'Total EPRs created in the link layer: {total_eprs}')
-        self.logger.debug(f'Total fidelity of EPRs created in the link layer: {total_fidelity}')
-        avg_fidelity = total_fidelity / total_eprs
+        self.logger.debug(f'Total EPRs created in the link layer: {self._epr_count}')
+        self.logger.debug(f'Total fidelity of EPRs created in the link layer: {self._epr_fidelity_sum}')
+        avg_fidelity = self._epr_fidelity_sum / self._epr_count
         self.logger.log(f'The average fidelity of EPRs created in the link layer is {avg_fidelity}')
         return avg_fidelity

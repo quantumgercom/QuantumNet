@@ -19,7 +19,6 @@ class TransportLayer:
         self._network_layer = network_layer
         self.logger = Logger.get_instance()
         self.transmitted_qubits = []
-        self.created_eprs = []  # List to store created EPRs
 
     def __str__(self):
         """ Return the string representation of the transport layer.

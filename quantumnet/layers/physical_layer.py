@@ -37,7 +37,6 @@ class PhysicalLayer:
         self._physical_layer_id = physical_layer_id
         self._context = context
         self._failed_eprs = []
-        self.created_eprs = []  # List to store all created EPRs
         self._count_epr = 0
         self.logger = Logger.get_instance()
 
@@ -263,9 +262,6 @@ class PhysicalLayer:
         self.logger.log(f'Timeslot {self._context.clock.now}: EPR pair created with fidelity {epr_fidelity}')
         epr = self.create_epr_pair(epr_fidelity)
 
-        # Store the created EPR in the created EPRs list
-        self.created_eprs.append(epr)
-
         alice_host_id = alice.host_id
         bob_host_id = bob.host_id
 
@@ -282,7 +278,7 @@ class PhysicalLayer:
             success = False
 
         if on_complete is not None:
-            on_complete(success=success)
+            on_complete(success=success, epr_fidelity=epr_fidelity)
 
     def echp_on_demand(self, alice_host_id: int, bob_host_id: int, on_complete=None):
         """Schedule on-demand ECHP. Fire-and-forget.
