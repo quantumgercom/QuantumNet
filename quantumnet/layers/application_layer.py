@@ -63,7 +63,7 @@ class ApplicationLayer:
         self.logger.debug(f"E91 qubits prepared at timeslot: {self._context.clock.now}")
         qubits = []
         for bit, base in zip(key, bases):
-            qubit = Qubit(qubit_id=random.randint(0, 1000))  # Create new qubit with random ID
+            qubit = Qubit(qubit_id=self._context.generate_qubit_id())  # Create new qubit with unique ID
             if bit == 1:
                 qubit.apply_x()  # Apply X gate (NOT) to qubit if bit is 1
             if base == 1:

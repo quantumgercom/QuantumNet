@@ -37,7 +37,6 @@ class PhysicalLayer:
         self._context = context
         self._failed_eprs = []
         self.created_eprs = []  # List to store all created EPRs
-        self._count_qubit = 0
         self._count_epr = 0
         self.logger = Logger.get_instance()
         self.used_eprs = 0
@@ -94,7 +93,7 @@ class PhysicalLayer:
         if host_id not in self._context.hosts:
             raise Exception(f'Host {host_id} does not exist in the network.')
 
-        qubit_id = self._count_qubit
+        qubit_id = self._context.generate_qubit_id()
         qubit = Qubit(
             qubit_id,
             clock=self._context.clock,
@@ -104,7 +103,6 @@ class PhysicalLayer:
 
         self._context.register_qubit_creation(qubit_id, "Physical Layer")
 
-        self._count_qubit += 1
         self._context.clock.emit('qubit_created', host_id=host_id, qubit_id=qubit_id)
         self.logger.debug(f'Qubit {qubit_id} created with initial fidelity {qubit.get_initial_fidelity()} and added to memory of Host {host_id}.')
 

@@ -11,3 +11,11 @@ Commit: fix(network): renomeia topologias para ingles e adiciona erro para nome 
 Commit: fix(network): preserva referencia do grafo ao atualizar topologia em set_ready_topology{
     1.4 - set_ready_topology() agora atualiza o grafo in-place com clear()+update() em vez de reatribuir self._graph a um novo objeto. Isso preserva a referencia original compartilhada via NetworkContext, eliminando o risco de camadas ou contexto ficarem com referencia obsoleta ao grafo antigo. Removida a reatribuicao manual self._context.graph = self._graph, que se tornou desnecessaria. Alteracao em network.py.
 }
+
+Commit: fix(controller): implementa validacao real em check_route{
+    1.5 - check_route() agora valida se a rota e valida no grafo da rede: verifica se a lista nao esta vazia, se todos os nos existem no grafo e se ha arestas conectando os nos consecutivos. Isso substitui o return True incondicional que mascarava bugs ao aceitar qualquer rota. Alteracao em controller.py.
+}
+
+Commit: fix(qubit): centraliza geracao de IDs de qubit para evitar colisoes{
+    1.6 - Criado gerador centralizado de IDs de qubit em NetworkContext (metodo generate_qubit_id() com contador _next_qubit_id). ApplicationLayer.prepare_e91_qubits() agora usa o gerador centralizado em vez de random.randint(0, 1000), eliminando colisoes de IDs. PhysicalLayer.create_qubit() tambem migrado para usar o gerador centralizado, removendo o contador _count_qubit local. Isso garante unicidade global de IDs entre todas as camadas, evitando corrupcao do qubit_timeslots. Alteracoes em network_context.py, application_layer.py e physical_layer.py.
+}
