@@ -56,17 +56,15 @@ class Host():
         return self._routing_table
 
 
-    def get_last_qubit(self):
+    def consume_last_qubit(self):
         """
-        Return the last qubit from memory.
+        Remove and return the last qubit from memory.
 
         Returns:
             Qubit: Last qubit from memory.
         """
         try:
-            q = self.memory[-1]
-            self.memory.remove(q)
-            return q
+            return self.memory.pop()
         except IndexError:
             raise Exception('No more qubits in memory.')
 

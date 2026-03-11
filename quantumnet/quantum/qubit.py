@@ -51,14 +51,26 @@ class Qubit():
         self._qubit_state = 1 if self._qubit_state == 0 else 0
 
     def apply_hadamard(self):
-        """Apply Hadamard gate (H) to the qubit."""
-        # Hadamard transforms state |0> into (|0> + |1>) / sqrt(2)
-        # and |1> into (|0> - |1>) / sqrt(2). For simulation, probability is used.
+        """Apply Hadamard gate (H) to the qubit.
+
+        Uses a superposition marker (2 for |+⟩, 3 for |−⟩) so that
+        H(H|ψ⟩) = |ψ⟩ holds.  Measurement collapses the superposition.
+        """
         if self._qubit_state == 0:
-            self._qubit_state = random.choice([0, 1])  # Simulates superposition
-        else:
-            self._qubit_state = random.choice([0, 1])  # Simulates superposition
+            self._qubit_state = 2  # |0⟩ → |+⟩
+        elif self._qubit_state == 1:
+            self._qubit_state = 3  # |1⟩ → |−⟩
+        elif self._qubit_state == 2:
+            self._qubit_state = 0  # |+⟩ → |0⟩
+        elif self._qubit_state == 3:
+            self._qubit_state = 1  # |−⟩ → |1⟩
 
     def measure(self):
-        """Perform measurement of the qubit in its current state."""
+        """Perform measurement of the qubit in its current state.
+
+        If the qubit is in superposition (|+⟩ or |−⟩), collapses to |0⟩ or |1⟩
+        with equal probability and updates the internal state.
+        """
+        if self._qubit_state in (2, 3):
+            self._qubit_state = random.choice([0, 1])
         return self._qubit_state

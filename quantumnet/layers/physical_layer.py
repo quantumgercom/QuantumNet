@@ -258,8 +258,8 @@ class PhysicalLayer:
         """Execute heralding at the scheduled timeslot."""
         self.used_qubits += 2
 
-        qubit1 = alice.get_last_qubit()
-        qubit2 = bob.get_last_qubit()
+        qubit1 = alice.consume_last_qubit()
+        qubit2 = bob.consume_last_qubit()
 
         q1 = qubit1.get_current_fidelity()
         q2 = qubit2.get_current_fidelity()
@@ -308,8 +308,8 @@ class PhysicalLayer:
         """Execute on-demand ECHP at the scheduled timeslot."""
         self.used_qubits += 2
 
-        qubit1 = self._context.hosts[alice_host_id].get_last_qubit()
-        qubit2 = self._context.hosts[bob_host_id].get_last_qubit()
+        qubit1 = self._context.hosts[alice_host_id].consume_last_qubit()
+        qubit2 = self._context.hosts[bob_host_id].consume_last_qubit()
 
         fidelity_qubit1 = self.fidelity_measurement_only_one(qubit1)
         fidelity_qubit2 = self.fidelity_measurement_only_one(qubit2)
@@ -351,8 +351,8 @@ class PhysicalLayer:
         """Execute replay ECHP at the scheduled timeslot."""
         self.used_qubits += 2
 
-        qubit1 = self._context.hosts[alice_host_id].get_last_qubit()
-        qubit2 = self._context.hosts[bob_host_id].get_last_qubit()
+        qubit1 = self._context.hosts[alice_host_id].consume_last_qubit()
+        qubit2 = self._context.hosts[bob_host_id].consume_last_qubit()
 
         fidelity_qubit1 = self.fidelity_measurement_only_one(qubit1)
         fidelity_qubit2 = self.fidelity_measurement_only_one(qubit2)
