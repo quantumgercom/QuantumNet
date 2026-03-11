@@ -35,3 +35,7 @@ Commit: fix(imports): padroniza imports para relativos em todas as camadas{
 Commit: fix(qubit,epr): converte getters/setters Java-style para @property{
     2.2 - Metodos get_current_fidelity(), set_current_fidelity() e get_initial_fidelity() substituidos por @property current_fidelity (com setter) e @property initial_fidelity em Qubit e Epr, seguindo o estilo idiomatico Python ja adotado em Host. Todos os callers atualizados: qubit.get_current_fidelity() -> qubit.current_fidelity, qubit.set_current_fidelity(v) -> qubit.current_fidelity = v, qubit.get_initial_fidelity() -> qubit.initial_fidelity, e equivalentes em Epr. Alteracoes em qubit.py, epr.py, physical_layer.py, link_layer.py, network_layer.py e transport_layer.py.
 }
+
+Commit: refactor(layers): substitui contadores used_eprs/used_qubits por logging{
+    2.5 - Atributos used_eprs e used_qubits (contadores inteiros) e metodos get_used_eprs()/get_used_qubits() removidos de todas as camadas (Physical, Link, Network, Transport, Application), eliminando codigo 100% duplicado. Cada self.used_eprs += N e self.used_qubits += N foi substituido por self.logger.log() com a mesma informacao de uso. Removidos tambem get_total_used_eprs() e get_total_used_qubits() de network.py e as entradas "Used EPRs"/"Used Qubits" de get_metrics(). Notebooks atualizados para remover chamadas a esses metodos. Alteracoes em physical_layer.py, link_layer.py, network_layer.py, transport_layer.py, application_layer.py, network.py e todos os notebooks de documentacao.
+}
