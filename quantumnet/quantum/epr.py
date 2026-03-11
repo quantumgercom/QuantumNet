@@ -35,7 +35,7 @@ class Epr():
             return self._base_fidelity
         return self._base_fidelity * (self._decoherence_rate ** elapsed)
 
-    def set_fidelity(self, new_fidelity: float):
+    def set_current_fidelity(self, new_fidelity: float):
         """
         Snapshot fidelity at the current timeslot.
 
