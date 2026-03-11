@@ -280,28 +280,29 @@ class PhysicalLayer:
         if on_complete is not None:
             on_complete(success=success, epr_fidelity=epr_fidelity)
 
-    def echp_on_demand(self, alice_host_id: int, bob_host_id: int, on_complete=None):
-        """Schedule on-demand ECHP. Fire-and-forget.
+    def echp(self, alice_host_id: int, bob_host_id: int, mode: str, on_complete=None):
+        """Schedule ECHP. Fire-and-forget.
 
         Args:
             alice_host_id (int): Alice Host ID.
             bob_host_id (int): Bob Host ID.
+            mode (str): 'on_demand' or 'on_replay'.
             on_complete: Optional callback(success=bool).
         """
-        cost = self._context.config.costs.on_demand
+        cost = self._context.config.costs.on_demand if mode == 'on_demand' else self._context.config.costs.replay
         self._context.clock.schedule(
-            cost, self._do_on_demand,
+            cost, self._do_echp,
             alice_host_id=alice_host_id, bob_host_id=bob_host_id,
-            on_complete=on_complete
+            mode=mode, on_complete=on_complete
         )
 
-    def _do_on_demand(self, alice_host_id, bob_host_id, on_complete=None):
-        """Execute on-demand ECHP at the scheduled timeslot."""
+    def _do_echp(self, alice_host_id, bob_host_id, mode, on_complete=None):
+        """Execute ECHP at the scheduled timeslot."""
         alice = self._context.hosts[alice_host_id]
         bob = self._context.hosts[bob_host_id]
 
         if not alice.memory or not bob.memory:
-            self.logger.log(f'Timeslot {self._context.clock.now}: On-demand ECHP failed — insufficient qubits (Alice={alice_host_id}, Bob={bob_host_id}).')
+            self.logger.log(f'Timeslot {self._context.clock.now}: {mode} ECHP failed — insufficient qubits (Alice={alice_host_id}, Bob={bob_host_id}).')
             if on_complete is not None:
                 on_complete(success=False)
             return
@@ -314,70 +315,19 @@ class PhysicalLayer:
         fidelity_qubit1 = self.fidelity_measurement_only_one(qubit1)
         fidelity_qubit2 = self.fidelity_measurement_only_one(qubit2)
 
-        prob_on_demand_epr_create = self._context.graph.edges[alice_host_id, bob_host_id]['prob_on_demand_epr_create']
-        echp_success_probability = prob_on_demand_epr_create * fidelity_qubit1 * fidelity_qubit2
+        prob_key = 'prob_on_demand_epr_create' if mode == 'on_demand' else 'prob_replay_epr_create'
+        prob = self._context.graph.edges[alice_host_id, bob_host_id][prob_key]
+        echp_success_probability = prob * fidelity_qubit1 * fidelity_qubit2
 
         if uniform(0, 1) < echp_success_probability:
             self.logger.log(f'Timeslot {self._context.clock.now}: EPR pair created with fidelity {fidelity_qubit1 * fidelity_qubit2}')
             epr = self.create_epr_pair(fidelity_qubit1 * fidelity_qubit2)
             self.add_epr_to_channel(epr, (alice_host_id, bob_host_id))
-            self._context.clock.emit('echp_on_demand_success', alice=alice_host_id, bob=bob_host_id)
+            self._context.clock.emit(f'echp_{mode}_success', alice=alice_host_id, bob=bob_host_id)
             self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability is {echp_success_probability}')
             success = True
         else:
-            self._context.clock.emit('echp_on_demand_failed', alice=alice_host_id, bob=bob_host_id)
-            self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability failed.')
-            success = False
-
-        if on_complete is not None:
-            on_complete(success=success)
-
-    def echp_on_replay(self, alice_host_id: int, bob_host_id: int, on_complete=None):
-        """Schedule replay ECHP. Fire-and-forget.
-
-        Args:
-            alice_host_id (int): Alice Host ID.
-            bob_host_id (int): Bob Host ID.
-            on_complete: Optional callback(success=bool).
-        """
-        cost = self._context.config.costs.replay
-        self._context.clock.schedule(
-            cost, self._do_on_replay,
-            alice_host_id=alice_host_id, bob_host_id=bob_host_id,
-            on_complete=on_complete
-        )
-
-    def _do_on_replay(self, alice_host_id, bob_host_id, on_complete=None):
-        """Execute replay ECHP at the scheduled timeslot."""
-        alice = self._context.hosts[alice_host_id]
-        bob = self._context.hosts[bob_host_id]
-
-        if not alice.memory or not bob.memory:
-            self.logger.log(f'Timeslot {self._context.clock.now}: Replay ECHP failed — insufficient qubits (Alice={alice_host_id}, Bob={bob_host_id}).')
-            if on_complete is not None:
-                on_complete(success=False)
-            return
-
-        self.logger.log(f'{self.__class__.__name__}: 2 qubits used')
-
-        qubit1 = alice.consume_last_qubit()
-        qubit2 = bob.consume_last_qubit()
-
-        fidelity_qubit1 = self.fidelity_measurement_only_one(qubit1)
-        fidelity_qubit2 = self.fidelity_measurement_only_one(qubit2)
-
-        prob_replay_epr_create = self._context.graph.edges[alice_host_id, bob_host_id]['prob_replay_epr_create']
-        echp_success_probability = prob_replay_epr_create * fidelity_qubit1 * fidelity_qubit2
-
-        if uniform(0, 1) < echp_success_probability:
-            self.logger.log(f'Timeslot {self._context.clock.now}: EPR pair created with fidelity {fidelity_qubit1 * fidelity_qubit2}')
-            epr = self.create_epr_pair(fidelity_qubit1 * fidelity_qubit2)
-            self.add_epr_to_channel(epr, (alice_host_id, bob_host_id))
-            self._context.clock.emit('echp_on_replay_success', alice=alice_host_id, bob=bob_host_id)
-            self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability is {echp_success_probability}')
-            success = True
-        else:
-            self._context.clock.emit('echp_on_replay_failed', alice=alice_host_id, bob=bob_host_id)
+            self._context.clock.emit(f'echp_{mode}_failed', alice=alice_host_id, bob=bob_host_id)
             self.logger.log(f'Timeslot {self._context.clock.now}: ECHP success probability failed.')
             success = False
 

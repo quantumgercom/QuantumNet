@@ -18,8 +18,8 @@ Isso significa que:
 | `create_qubit()` | 0 ticks | `physical_layer.py` | ~61 |
 | `create_epr_pair()` | 0 ticks | `physical_layer.py` | ~87 |
 | `entanglement_creation_heralding_protocol()` | 1 tick | `physical_layer.py` | ~171 |
-| `echp_on_demand()` | 1 tick | `physical_layer.py` | ~214 |
-| `echp_on_replay()` | 1 tick | `physical_layer.py` | ~247 |
+| `echp(mode='on_demand')` | 1 tick | `physical_layer.py` | ~283 |
+| `echp(mode='on_replay')` | 1 tick | `physical_layer.py` | ~283 |
 | `request()` | 1-2 ticks (indireto) | `link_layer.py` | ~63 |
 | `purification()` | 1 tick | `link_layer.py` | ~145 |
 | `short_route_valid()` | 0 ticks | `network_layer.py` | ~51 |
@@ -50,9 +50,7 @@ Isso significa que:
 
 - **`entanglement_creation_heralding_protocol(alice, bob)`** (linha ~171): Protocolo de criacao de emaranhamento com sinalizacao. Pega o ultimo qubit de cada host, calcula a fidelidade do par EPR resultante, e adiciona ao canal. **Custa 1 tick** porque representa uma rodada fisica completa de tentativa de emaranhamento.
 
-- **`echp_on_demand(alice_id, bob_id)`** (linha ~214): Recriacao de emaranhamento sob demanda. Usa a probabilidade do canal (`prob_on_demand_epr_create`) multiplicada pela fidelidade dos qubits para determinar sucesso. **Custa 1 tick** — representa a tentativa de recriar o emaranhamento.
-
-- **`echp_on_replay(alice_id, bob_id)`** (linha ~247): Mesmo principio do `echp_on_demand`, mas usa `prob_replay_epr_create`. Para qubits que estavam perdendo caracteristicas. **Custa 1 tick**.
+- **`echp(alice_id, bob_id, mode)`** (linha ~283): Recriacao de emaranhamento unificada. Aceita `mode='on_demand'` (usa `prob_on_demand_epr_create`) ou `mode='on_replay'` (usa `prob_replay_epr_create`). A probabilidade do canal e multiplicada pela fidelidade dos qubits para determinar sucesso. **Custa 1 tick** — representa a tentativa de recriar o emaranhamento.
 
 ---
 
@@ -153,10 +151,10 @@ Eventos registrados via `clock.emit()` nao avancam o tempo. Servem para rastream
 | `epr_created` | `physical_layer.create_epr_pair()` | Par EPR criado |
 | `echp_success` | `physical_layer.heralding_protocol()` | Emaranhamento criado com fidelidade >= 0.8 |
 | `echp_low_fidelity` | `physical_layer.heralding_protocol()` | Emaranhamento criado com fidelidade < 0.8 |
-| `echp_on_demand_success` | `physical_layer.echp_on_demand()` | ECHP sob demanda bem-sucedido |
-| `echp_on_demand_failed` | `physical_layer.echp_on_demand()` | ECHP sob demanda falhou |
-| `echp_on_replay_success` | `physical_layer.echp_on_replay()` | ECHP replay bem-sucedido |
-| `echp_on_replay_failed` | `physical_layer.echp_on_replay()` | ECHP replay falhou |
+| `echp_on_demand_success` | `physical_layer.echp(mode='on_demand')` | ECHP sob demanda bem-sucedido |
+| `echp_on_demand_failed` | `physical_layer.echp(mode='on_demand')` | ECHP sob demanda falhou |
+| `echp_on_replay_success` | `physical_layer.echp(mode='on_replay')` | ECHP replay bem-sucedido |
+| `echp_on_replay_failed` | `physical_layer.echp(mode='on_replay')` | ECHP replay falhou |
 | `link_request_attempt` | `link_layer.request()` | Tentativa de emaranhamento na camada de enlace |
 | `purification_success` | `link_layer.purification()` | Purificacao bem-sucedida |
 | `purification_failed` | `link_layer.purification()` | Purificacao falhou |

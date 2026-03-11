@@ -51,3 +51,7 @@ Commit: fix(exceptions): remove excecoes que interrompiam simulacao em situacoes
 Commit: refactor(layers): substitui lista created_eprs por acumuladores de fidelidade{
     3.3 - Listas created_eprs em PhysicalLayer, LinkLayer e TransportLayer removidas. O padrao fragil de transferencia manual (extend + clear em 3 lugares da LinkLayer) foi eliminado. Em seu lugar, _do_heralding() em physical_layer.py agora propaga epr_fidelity no callback on_complete(success, epr_fidelity). A LinkLayer acumula soma e contagem de fidelidade em _epr_fidelity_sum e _epr_count diretamente no callback on_heralding_done, capturando o valor no momento da criacao. avg_fidelity_on_linklayer() passa a usar os acumuladores em vez da lista de objetos. Em transport_layer.py, created_eprs era codigo morto (nunca populado nem lido) e foi removido. Alteracoes em physical_layer.py, link_layer.py e transport_layer.py.
 }
+
+Commit: refactor(physical): unifica echp_on_demand e echp_on_replay em metodo echp(mode){
+    3.1 - echp_on_demand() e echp_on_replay() removidos. Substituidos por echp(alice_host_id, bob_host_id, mode) e _do_echp(). mode='on_demand' usa costs.on_demand e prob_on_demand_epr_create; mode='on_replay' usa costs.replay e prob_replay_epr_create. Eventos emitidos preservados (echp_on_demand_success/failed, echp_on_replay_success/failed) via f-string com o mode. Notebook physical_layer.ipynb e docs/clock_ticks.md atualizados. Alteracao em physical_layer.py.
+}
