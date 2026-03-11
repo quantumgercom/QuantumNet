@@ -218,18 +218,20 @@ class Network():
 
         """
         # Create the graph for the chosen topology
-        if topology_name == 'Grade':
+        if topology_name == 'Grid':
             if len(args) != 2:
                 raise Exception('Grid topology requires two arguments.')
             self._graph = nx.grid_2d_graph(*args)
-        elif topology_name == 'Linha':
+        elif topology_name == 'Line':
             if len(args) != 1:
                 raise Exception('Line topology requires one argument.')
             self._graph = nx.path_graph(*args)
-        elif topology_name == 'Anel':
+        elif topology_name == 'Ring':
             if len(args) != 1:
                 raise Exception('Ring topology requires one argument.')
             self._graph = nx.cycle_graph(*args)
+        else:
+            raise ValueError(f"Unknown topology '{topology_name}'. Available: Grid, Line, Ring.")
 
         # Convert node labels to integers
         self._graph = nx.convert_node_labels_to_integers(self._graph)

@@ -1,3 +1,6 @@
 1.1 - apply_hadamard() agora usa marcadores de superposicao (2 para |+>, 3 para |->) em vez de random.choice direto. Isso garante que H(H|psi>) = |psi> (aplicar Hadamard duas vezes retorna ao estado original). O colapso aleatorio agora ocorre apenas no measure(), quando o qubit esta em superposicao. Alteracao em qubit.py.
 
-1.2 - get_last_qubit() renomeado para pop_last_qubit() para refletir o efeito colateral destrutivo (remocao do qubit da memoria). Internamente, self.memory.remove(q) (busca linear O(n)) foi substituido por self.memory.pop() (O(1)). Todas as referencias em physical_layer.py foram atualizadas. Alteracao em host.py e physical_layer.py.
+1.2 - get_last_qubit() renomeado para consume_last_qubit() para refletir o efeito colateral destrutivo (remocao do qubit da memoria). Internamente, self.memory.remove(q) (busca linear O(n)) foi substituido por self.memory.pop() (O(1)). Todas as referencias em physical_layer.py foram atualizadas. Alteracao em host.py e physical_layer.py.
+
+1.3 - Nomes das topologias em set_ready_topology() renomeados de portugues para ingles ('Grade' -> 'Grid', 'Linha' -> 'Line', 'Anel' -> 'Ring'), alinhando implementacao com a documentacao existente. Adicionado bloco else com raise ValueError para topologias desconhecidas, eliminando falha silenciosa. Alteracao em network.py.
+
