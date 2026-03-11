@@ -55,3 +55,10 @@ Commit: refactor(layers): substitui lista created_eprs por acumuladores de fidel
 Commit: refactor(physical): unifica echp_on_demand e echp_on_replay em metodo echp(mode){
     3.1 - echp_on_demand() e echp_on_replay() removidos. Substituidos por echp(alice_host_id, bob_host_id, mode) e _do_echp(). mode='on_demand' usa costs.on_demand e prob_on_demand_epr_create; mode='on_replay' usa costs.replay e prob_replay_epr_create. Eventos emitidos preservados (echp_on_demand_success/failed, echp_on_replay_success/failed) via f-string com o mode. Notebook physical_layer.ipynb e docs/clock_ticks.md atualizados. Alteracao em physical_layer.py.
 }
+
+Commit: fix(typing): corrige type hints e verificacoes de tipo em link_layer, host e epr{
+    4.1 - purification_calculator em link_layer.py: parametros f1 e f2 corrigidos de int para float, pois representam fidelidades (valores entre 0 e 1). Docstring atualizada.
+    4.2 - Host.add_connection em host.py: substituido type(x) != int por not isinstance(x, int), aceitando subclasses de int como numpy.int64 usadas pelo NetworkX.
+    4.3 - Host.info() em host.py: comparacao self.routing_table == None substituida por self.routing_table is None, seguindo a convencao PEP 8.
+    4.4 - Epr.__init__ em epr.py: epr_id anotado como Union[int, tuple] para refletir os dois usos reais: int em physical_layer e tuple (alice_id, bob_id) em link_layer e network_layer.
+}
