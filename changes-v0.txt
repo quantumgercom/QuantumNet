@@ -70,6 +70,10 @@ Commit: fix(style): corrige convencoes de nomenclatura e adiciona repr/eq/hash e
     6.7 - __eq__ e __hash__ adicionados a Qubit e Epr com base no respectivo id, tornando list.remove() e operacoes de colecao dependentes de valor em vez de identidade de objeto. Alteracao em qubit.py e epr.py.
 }
 
+Commit: refactor(logger): remove globais e reimplementa ativacao com handlers nativos{
+    - Removidos FORMAT global e logging.basicConfig(), que poluiam a configuracao de logging do processo inteiro. Removido atributo de classe DISABLED. __init__ agora limpa handlers herdados, adiciona NullHandler e seta nivel base DEBUG, garantindo saida silenciosa por default. activate() reimplementado com parametros level (default 'INFO'), console (bool), file_log (bool) e filename (str opcional); gera nome com timestamp se filename nao fornecido; configura FileHandler e/ou StreamHandler conforme os flags. Metodos warn/error/log/debug simplificados para delegar diretamente a self.logger, sem guarda DISABLED. Adicionado import datetime. Alteracao em logger.py.
+}
+
 Commit: refactor(metrics): reimplementa coleta de metricas com MetricsCollector orientado a eventos{
     1 - Criado MetricsCollector em quantumnet/utils/metrics.py. O arquivo CSV e aberto uma unica vez no __init__ e mantido aberto durante toda a simulacao. Fechamento seguro via close() (flush + close) com suporte a context manager (__enter__/__exit__). Export adicionado em utils/__init__.py. Alteracoes em metrics.py (novo) e utils/__init__.py.
     2 - Schema generico do CSV com colunas fixas: clock_tick, event_type, source_node, target_node, value, details. source_node extraido por prioridade de chaves (alice, host_id, node); target_node de (bob, target); value de (fidelity, key_length, count, route_len, etc.); demais primitivos vao para details como JSON compacto. Alteracao em metrics.py.
