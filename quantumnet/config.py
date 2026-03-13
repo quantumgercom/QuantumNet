@@ -1,0 +1,106 @@
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
+
+
+@dataclass
+class DecoherenceConfig:
+    """Decoherence parameters."""
+    per_timeslot: float = 0.9
+    per_measurement: float = 0.99
+    qubit_ttl_threshold: float = 0.1
+    epr_ttl_threshold: float = 0.1
+
+
+@dataclass
+class FidelityConfig:
+    """Fidelity thresholds used by protocols."""
+    epr_threshold: float = 0.8
+    purification_threshold: float = 0.8
+    purification_min_probability: float = 0.5
+    initial_epr_fidelity: float = 1.0
+
+
+@dataclass
+class ProbabilityConfig:
+    """Probability limits for EPR creation."""
+    epr_create_max: float = 1.0
+    epr_create_min: float = 0.2
+
+
+@dataclass
+class ProtocolConfig:
+    """Communication protocol parameters."""
+    link_max_attempts: int = 2
+    link_purification_after_failures: int = 2
+    transport_max_attempts: int = 2
+
+
+@dataclass
+class DefaultsConfig:
+    """Default network initialization values."""
+    qubits_per_host: int = 10
+    eprs_per_channel: int = 10
+
+
+@dataclass
+class CostsConfig:
+    """Timeslot costs for DES operations."""
+    heralding: int = 1
+    on_demand: int = 1
+    replay: int = 1
+    purification: int = 1
+    swapping: int = 1
+    qubit_creation: int = 1
+    e91_round: int = 1
+
+
+@dataclass
+class SimulationConfig:
+    """Centralized simulation configuration.
+
+    Can be instantiated with default values or loaded from a YAML file.
+
+    Examples::
+
+        # Default values
+        config = SimulationConfig()
+
+        # From YAML
+        config = SimulationConfig.from_yaml('scenario.yaml')
+
+        # Programmatic override
+        config = SimulationConfig()
+        config.decoherence.per_timeslot = 0.95
+    """
+    decoherence: DecoherenceConfig = field(default_factory=DecoherenceConfig)
+    fidelity: FidelityConfig = field(default_factory=FidelityConfig)
+    probability: ProbabilityConfig = field(default_factory=ProbabilityConfig)
+    protocol: ProtocolConfig = field(default_factory=ProtocolConfig)
+    defaults: DefaultsConfig = field(default_factory=DefaultsConfig)
+    costs: CostsConfig = field(default_factory=CostsConfig)
+
+    @classmethod
+    def from_yaml(cls, path: str) -> 'SimulationConfig':
+        """Load configuration from a YAML file.
+
+        Missing fields in YAML keep their default value.
+
+        Args:
+            path: Path to the YAML file.
+
+        Returns:
+            SimulationConfig with values from the file.
+        """
+        with open(path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f) or {}
+
+        return cls(
+            decoherence=DecoherenceConfig(**data.get('decoherence', {})),
+            fidelity=FidelityConfig(**data.get('fidelity', {})),
+            probability=ProbabilityConfig(**data.get('probability', {})),
+            protocol=ProtocolConfig(**data.get('protocol', {})),
+            defaults=DefaultsConfig(**data.get('defaults', {})),
+            costs=CostsConfig(**data.get('costs', {})),
+        )

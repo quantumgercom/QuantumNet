@@ -1,0 +1,36 @@
+# Default QuantumNet simulation configuration
+# Copy this file and change values to create custom scenarios.
+
+decoherence:
+  per_timeslot: 0.9       # Decoherence factor applied per timeslot (lazy evaluation)
+  per_measurement: 0.99    # Decoherence factor applied on each fidelity measurement
+  qubit_ttl_threshold: 0.1 # Remove qubit when fidelity drops below this
+  epr_ttl_threshold: 0.1   # Remove EPR when fidelity drops below this
+
+fidelity:
+  epr_threshold: 0.8                # Minimum fidelity to consider an EPR successful (ECHP)
+  purification_threshold: 0.8       # Minimum fidelity after purification to accept the EPR
+  purification_min_probability: 0.5 # Minimum probability to attempt purification
+  initial_epr_fidelity: 1.0         # Default initial fidelity of a created EPR pair
+
+probability:
+  epr_create_max: 1.0   # Maximum EPR creation probability on channels
+  epr_create_min: 0.2   # Minimum EPR creation probability on channels
+
+protocol:
+  link_max_attempts: 2                  # Entanglement attempts before purification
+  link_purification_after_failures: 2   # Number of failures to trigger purification
+  transport_max_attempts: 2             # Maximum transmission attempts in transport layer
+
+defaults:
+  qubits_per_host: 10    # Qubits initialized per host
+  eprs_per_channel: 10   # EPR pairs initialized per channel
+
+costs:
+  heralding: 1            # Timeslots for entanglement creation heralding protocol
+  on_demand: 1            # Timeslots for on-demand ECHP
+  replay: 1               # Timeslots for replay ECHP
+  purification: 1         # Timeslots for EPR purification
+  swapping: 1             # Timeslots per entanglement swap
+  qubit_creation: 1       # Timeslots per qubit creation
+  e91_round: 1            # Timeslots per E91 protocol round
