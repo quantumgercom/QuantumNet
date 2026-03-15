@@ -258,6 +258,7 @@ class Network():
         for host_id in self._hosts:
             for i in range(num_qubits):
                 self.physical.create_qubit(host_id, increment_qubits=False)
+        self.physical.start_qubit_regen()
         self.logger.debug("Hosts initialized")
 
     def start_channels(self):

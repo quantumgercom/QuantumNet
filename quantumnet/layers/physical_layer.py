@@ -198,6 +198,36 @@ class PhysicalLayer:
         except (KeyError, ValueError):
             pass  # Channel or EPR already gone
 
+    def start_qubit_regen(self):
+        """Schedule periodic qubit regeneration for all hosts.
+
+        Uses config.defaults.qubit_regen_interval (ticks between cycles) and
+        config.defaults.qubit_regen_amount (qubits created per host per cycle).
+        Does nothing if qubit_regen_interval is 0.
+        """
+        interval = self._context.config.defaults.qubit_regen_interval
+        if interval > 0:
+            self._context.clock.schedule(interval, self._do_qubit_regen)
+
+    def _do_qubit_regen(self):
+        """Create new qubits for every host, then reschedule the next cycle."""
+        amount = self._context.config.defaults.qubit_regen_amount
+        for host_id in self._context.hosts:
+            for _ in range(amount):
+                self.create_qubit(host_id, increment_qubits=False)
+        self._context.clock.emit(
+            'qubits_regenerated',
+            host_count=len(self._context.hosts),
+            amount_per_host=amount,
+        )
+        self.logger.debug(
+            f'Timeslot {self._context.clock.now}: '
+            f'Qubit regeneration — {amount} qubits added to each of '
+            f'{len(self._context.hosts)} hosts.'
+        )
+        interval = self._context.config.defaults.qubit_regen_interval
+        self._context.clock.schedule(interval, self._do_qubit_regen)
+
     def fidelity_measurement_only_one(self, qubit: Qubit):
         """Measure the fidelity of a qubit.
 
