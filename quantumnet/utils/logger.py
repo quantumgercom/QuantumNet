@@ -31,7 +31,7 @@ class Logger(object):
             if filename is None:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 filename = f'quantumnet_{timestamp}.log'
-            fh = logging.FileHandler(filename)
+            fh = logging.FileHandler(filename, encoding='utf-8')
             fh.setFormatter(fmt)
             fh.setLevel(log_level)
             self.logger.addHandler(fh)
