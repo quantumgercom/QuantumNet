@@ -6,6 +6,7 @@
 
 - **Python** 3.10
 - Dependências listadas em `requirements.txt`
+- Dependências extras de notebook em `requirements-notebook.txt`
 
 ## Execução com Docker
 
@@ -47,9 +48,35 @@ docker compose run --rm quantumnet bash
 python3 seu_script.py
 ```
 
+### Executar notebooks Jupyter com Docker
+
+1. Construa a imagem de notebook:
+
+```bash
+docker compose build quantumnet-notebook
+```
+
+2. Inicie o serviço de notebook:
+
+```bash
+docker compose up quantumnet-notebook
+```
+
+3. Abra no navegador:
+
+```text
+http://localhost:8888
+```
+
+4. Para encerrar:
+
+```bash
+docker compose down
+```
+
 ### Reconstruir a imagem
 
-Se alterar o `requirements.txt` ou o `Dockerfile`, reconstrua a imagem:
+Se alterar o `requirements.txt`, o `requirements-notebook.txt`, o `Dockerfile` ou o `Dockerfile.notebook`, reconstrua a imagem:
 
 ```bash
 docker compose build --no-cache
@@ -175,7 +202,10 @@ docker compose run --rm quantumnet python3 teste_rapido.py
 
 ```
 QuantumNet/
+├── Dockerfile
+├── Dockerfile.notebook
 ├── requirements.txt
+├── requirements-notebook.txt
 ├── quantumnet/
 │   ├── config.py               # Configurações globais da simulação
 │   ├── exceptions.py           # Exceções customizadas

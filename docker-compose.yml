@@ -6,3 +6,15 @@ services:
       - .:/app
     stdin_open: true
     tty: true
+
+  quantumnet-notebook:
+    build:
+      context: .
+      dockerfile: Dockerfile.notebook
+    container_name: quantumnet-notebook
+    volumes:
+      - .:/app
+    ports:
+      - "8888:8888"
+    stdin_open: true
+    tty: true
