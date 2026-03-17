@@ -25,7 +25,7 @@ protocol:
 defaults:
   qubits_per_host: 10    # Qubits initialized per host
   eprs_per_channel: 10   # EPR pairs initialized per channel
-  channel_noise_type: 'bit-flip'  # Channel noise: 'bit-flip', 'werner', or 'bitflip+werner'
+  channel_noise_type: 'random'  # Per-channel noise: 'bit-flip', 'werner', 'bitflip+werner', or 'random' (assigns one at random per channel)
 
 costs:
   heralding: 1            # Timeslots for entanglement creation heralding protocol

@@ -44,7 +44,7 @@ class DefaultsConfig:
     eprs_per_channel: int = 10
     qubit_regen_interval: int = 0   # ticks between regeneration cycles (0 = disabled)
     qubit_regen_amount: int = 3     # qubits added per host per cycle
-    channel_noise_type: str = 'bit-flip'  # 'bit-flip', 'werner', or 'bitflip+werner'
+    channel_noise_type: str = 'random'  # 'bit-flip', 'werner', 'bitflip+werner', or 'random' (assigns one at random per channel)
 
 
 @dataclass
