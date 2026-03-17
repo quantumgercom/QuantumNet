@@ -1,0 +1,8 @@
+services:
+  quantumnet:
+    build: .
+    container_name: quantumnet
+    volumes:
+      - .:/app
+    stdin_open: true
+    tty: true
