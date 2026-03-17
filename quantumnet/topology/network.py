@@ -266,10 +266,12 @@ class Network():
         Initialize network channels.
         """
         prob_cfg = self.config.probability
+        noise_type = self.config.defaults.channel_noise_type
         for edge in self.edges:
             self._graph.edges[edge]['prob_on_demand_epr_create'] = random.uniform(prob_cfg.epr_create_min, prob_cfg.epr_create_max)
             self._graph.edges[edge]['prob_replay_epr_create'] = random.uniform(prob_cfg.epr_create_min, prob_cfg.epr_create_max)
             self._graph.edges[edge]['eprs'] = list()
+            self._graph.edges[edge]['noise_type'] = noise_type
         self.logger.debug("Channels initialized")
 
     def start_eprs(self, num_eprs: int = None):
