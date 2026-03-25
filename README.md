@@ -16,9 +16,10 @@ Este README está organizado da seguinte forma:
 4. Dependências e recursos de terceiros.
 5. Preocupações com segurança.
 6. Instalação (Docker e local).
-7. Teste mínimo de funcionamento.
-8. Experimentos para reprodução das reivindicações.
-9. Licença.
+7. Interface gráfica de configuração.
+8. Teste mínimo de funcionamento.
+9. Experimentos para reprodução das reivindicações.
+10. Licença.
 
 # Selos Considerados
 
@@ -158,6 +159,28 @@ pip install -r requirements.txt
 
 ```bash
 python3 seu_script.py
+```
+
+# Interface gráfica de configuração (Streamlit)
+
+A interface gráfica permite editar o arquivo padrão `quantumnet/default_config.yaml` por meio de uma sidebar com as seções **Parâmetros** e **Versão**.
+
+## Rodar localmente
+
+```bash
+python -m quantumnet gui
+```
+
+## Rodar com Docker
+
+```bash
+docker compose run --rm --service-ports quantumnet python -m quantumnet gui --host 0.0.0.0 --port 8501
+```
+
+Depois, acesse:
+
+```text
+http://localhost:8501
 ```
 
 # Teste mínimo
