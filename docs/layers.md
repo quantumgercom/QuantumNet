@@ -385,7 +385,9 @@ from quantumnet.topology.network import Network
 
 clock = Clock()
 net = Network(clock=clock)
-net.set_ready_topology('Line', 5)
+net.config.topology.name = 'Line'
+net.config.topology.args = [5]
+net.set_ready_topology()
 
 net.physical            # PhysicalLayer
 net.linklayer           # LinkLayer
@@ -407,7 +409,9 @@ clock = Clock()
 net = Network(clock=clock)
 
 with MetricsCollector(clock, 'resultados.csv') as col:
-    net.set_ready_topology('Line', 5)
+    net.config.topology.name = 'Line'
+    net.config.topology.args = [5]
+    net.set_ready_topology()
 
     # Teleportar 3 qubits do nó 0 ao nó 4
     net.transportlayer.run_transport_layer(0, 4, num_qubits=3)
