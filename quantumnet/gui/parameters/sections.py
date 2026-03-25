@@ -276,7 +276,7 @@ def render_topology_section(current: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(topology, dict):
         topology = {}
 
-    ready_options = ["Line", "Grid", "Star"]
+    ready_options = ["Line", "Grid", "Star", "Ring", "Json"]
     current_name = topology.get("name", False)
     current_name_norm = _normalized_topology_name(current_name)
 
@@ -287,14 +287,18 @@ def render_topology_section(current: dict[str, Any]) -> dict[str, Any]:
         selected_default = "Grid"
     elif current_name_norm in {"star", "startopology"}:
         selected_default = "Star"
+    elif current_name_norm in {"ring", "ringtopology"}:
+        selected_default = "Ring"
+    elif current_name_norm in {"json", "jsontopology", "custom"}:
+        selected_default = "Json"
     else:
         selected_default = "Line"
 
     use_ready = st.checkbox(
-        "Use ready topology",
+        "Set topology",
         value=use_ready_default,
         help=(
-            "Enable a predefined topology from configuration. "
+            "Enable topology selection from configuration. "
             "When disabled, topology.name is saved as false."
         ),
     )
@@ -304,47 +308,50 @@ def render_topology_section(current: dict[str, Any]) -> dict[str, Any]:
         return {"name": False, "args": []}
 
     selected = st.selectbox(
-        "Ready topology type",
+        "Topology type",
         options=ready_options,
         index=ready_options.index(selected_default),
-        help="Choose one predefined topology to load from config.",
+        help="Choose a topology type and fill the required parameters.",
     )
 
-    args: list[int]
+    raw_args = topology.get("args", [])
+    if not isinstance(raw_args, list):
+        raw_args = []
+
+    args: list[Any]
     col1, col2 = _two_column_inputs()
-    if selected == "Line":
-        hosts = col1.number_input(
-            "Line: number of hosts",
-            min_value=1,
-            step=1,
-            value=max(1, safe_int(topology.get("args", [3])[0] if topology.get("args") else 3)),
+    if selected in {"Line", "Star", "Ring"}:
+        default_nodes = str(raw_args[0]).strip() if len(raw_args) > 0 else "5"
+        nodes = col1.text_input(
+            f"{selected}: number of nodes",
+            value=default_nodes,
+            help="Integer value greater than or equal to 1.",
         )
-        args = [int(hosts)]
+        args = [nodes.strip()]
     elif selected == "Grid":
-        raw_args = topology.get("args", [3, 3])
-        rows_default = safe_int(raw_args[0]) if isinstance(raw_args, list) and len(raw_args) > 0 else 3
-        cols_default = safe_int(raw_args[1]) if isinstance(raw_args, list) and len(raw_args) > 1 else 3
-        rows = col1.number_input(
-            "Grid: rows",
-            min_value=1,
-            step=1,
-            value=max(1, rows_default),
-        )
-        cols = col2.number_input(
+        rows_default = str(raw_args[0]).strip() if len(raw_args) > 0 else "3"
+        cols_default = str(raw_args[1]).strip() if len(raw_args) > 1 else "3"
+        cols = col1.text_input(
             "Grid: columns",
-            min_value=1,
-            step=1,
-            value=max(1, cols_default),
+            value=cols_default,
+            help="Integer value greater than or equal to 1.",
         )
-        args = [int(rows), int(cols)]
+        rows = col2.text_input(
+            "Grid: rows",
+            value=rows_default,
+            help="Integer value greater than or equal to 1.",
+        )
+        args = [rows.strip(), cols.strip()]
+    elif selected == "Json":
+        default_filename = str(raw_args[0]).strip() if len(raw_args) > 0 else ""
+        json_filename = col1.text_input(
+            "JSON file name",
+            value=default_filename,
+            help="Exact file name or relative path to your custom topology JSON file.",
+        )
+        args = [json_filename.strip()]
     else:
-        hosts = col1.number_input(
-            "Star: number of hosts",
-            min_value=1,
-            step=1,
-            value=max(1, safe_int(topology.get("args", [5])[0] if topology.get("args") else 5)),
-        )
-        args = [int(hosts)]
+        args = []
 
     return {"name": selected, "args": args}
 

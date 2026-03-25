@@ -35,15 +35,14 @@ def render_parameters_page(default_config_path: Path) -> None:
         for err in current_errors:
             st.markdown(f"- {err}")
 
-    with st.form("quantumnet-config-form"):
-        decoherence = render_decoherence_section(current)
-        fidelity = render_fidelity_section(current)
-        probability = render_probability_section(current)
-        protocol = render_protocol_section(current)
-        defaults = render_defaults_section(current)
-        costs = render_costs_section(current)
-        topology = render_topology_section(current)
-        submitted = st.form_submit_button("Save configuration")
+    decoherence = render_decoherence_section(current)
+    fidelity = render_fidelity_section(current)
+    probability = render_probability_section(current)
+    protocol = render_protocol_section(current)
+    defaults = render_defaults_section(current)
+    costs = render_costs_section(current)
+    topology = render_topology_section(current)
+    submitted = st.button("Save configuration")
 
     if not submitted:
         return

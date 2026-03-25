@@ -65,6 +65,10 @@ def validate_config(values: dict[str, Any]) -> list[str]:
     elif normalized_name in {"json", "jsontopology", "custom"}:
         if len(args) != 1:
             errors.append("topology.args must contain exactly 1 value for Json.")
+        else:
+            json_file = str(args[0]).strip()
+            if not json_file:
+                errors.append("topology.args[0] must be the JSON file name for Json topology.")
     else:
         errors.append("topology.name must be false/null or one of: Line, Grid, Star, Ring, Json.")
 
