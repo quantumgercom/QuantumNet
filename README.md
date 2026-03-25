@@ -163,7 +163,7 @@ python3 seu_script.py
 
 # Interface gráfica de configuração (Streamlit)
 
-A interface gráfica permite editar o arquivo padrão `quantumnet/default_config.yaml` por meio de uma sidebar com as seções **Parâmetros** e **Versão**.
+A interface gráfica permite editar o arquivo padrão `quantumnet/config/default_config.yaml` por meio de uma sidebar com as seções **Parâmetros** e **Versão**.
 
 ## Rodar localmente
 

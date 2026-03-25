@@ -1,6 +1,6 @@
 # Configuration
 
-Este documento descreve os parametros da configuracao central do QuantumNet (`SimulationConfig`), usados no arquivo `quantumnet/default_config.yaml`.
+Este documento descreve os parametros da configuracao central do QuantumNet (`SimulationConfig`), usados no arquivo `quantumnet/config/default_config.yaml`.
 
 ## Visao Geral
 
@@ -14,7 +14,8 @@ A configuracao e dividida em 7 secoes:
 - `topology`
 - `costs`
 
-Se um campo nao existir no YAML, o valor padrao da dataclass em `quantumnet/config.py` e usado automaticamente.
+Se um campo nao existir no YAML, o valor padrao da dataclass em `quantumnet/config/config.py` e usado automaticamente.
+Por compatibilidade, referencias legadas a `quantumnet/default_config.yaml` na GUI/CLI sao redirecionadas para `quantumnet/config/default_config.yaml`.
 
 ## Regras Gerais de Validacao
 
@@ -86,6 +87,7 @@ Regras de `args`:
 - `Line`, `Star` e `Ring`: `args` com 1 inteiro (`num_hosts`).
 - `Grid`: `args` com 2 inteiros (`rows`, `cols`).
 - `Json`: `args` com 1 valor (caminho de arquivo JSON ou objeto inline).
+  - Ao usar o YAML padrao (`quantumnet/config/default_config.yaml`), caminhos relativos sao resolvidos a partir da pasta `quantumnet/config/`.
 
 Fluxo recomendado para topologia pronta:
 
