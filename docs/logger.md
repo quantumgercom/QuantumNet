@@ -100,7 +100,9 @@ logger.activate(level='DEBUG', console=True, filename='sim.log')
 
 clock = Clock()
 net = Network(clock=clock)
-net.set_ready_topology('Line', 5)
+net.config.topology.name = 'Line'
+net.config.topology.args = [5]
+net.set_ready_topology()
 clock.run()
 ```
 
