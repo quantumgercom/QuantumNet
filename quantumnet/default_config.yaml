@@ -22,8 +22,11 @@ defaults:
   qubit_regen_interval: 0
   qubit_regen_amount: 3
   channel_noise_type: random
+topology:
+  name: false
+  args: []
 costs:
-  heralding: 1
+  heralding: 5
   on_demand: 1
   replay: 1
   purification: 1
