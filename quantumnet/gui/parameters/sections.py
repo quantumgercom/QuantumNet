@@ -8,10 +8,15 @@ from quantumnet.gui.parameters.field_metadata import NOISE_OPTIONS, field_help
 from quantumnet.gui.parameters.validation import safe_int, safe_probability
 
 
+def _two_column_inputs() -> tuple[Any, Any]:
+    return st.columns(2)
+
+
 def render_decoherence_section(current: dict[str, Any]) -> dict[str, float]:
     st.subheader("Decoherence")
+    col1, col2 = _two_column_inputs()
     return {
-        "per_timeslot": st.number_input(
+        "per_timeslot": col1.number_input(
             "Decoherence per timeslot",
             min_value=0.0,
             max_value=1.0,
@@ -19,7 +24,7 @@ def render_decoherence_section(current: dict[str, Any]) -> dict[str, float]:
             value=safe_probability(current["decoherence"]["per_timeslot"]),
             help=field_help("decoherence", "per_timeslot"),
         ),
-        "per_measurement": st.number_input(
+        "per_measurement": col2.number_input(
             "Decoherence per measurement",
             min_value=0.0,
             max_value=1.0,
@@ -27,7 +32,7 @@ def render_decoherence_section(current: dict[str, Any]) -> dict[str, float]:
             value=safe_probability(current["decoherence"]["per_measurement"]),
             help=field_help("decoherence", "per_measurement"),
         ),
-        "qubit_ttl_threshold": st.number_input(
+        "qubit_ttl_threshold": col1.number_input(
             "Minimum qubit TTL",
             min_value=0.0,
             max_value=1.0,
@@ -35,7 +40,7 @@ def render_decoherence_section(current: dict[str, Any]) -> dict[str, float]:
             value=safe_probability(current["decoherence"]["qubit_ttl_threshold"]),
             help=field_help("decoherence", "qubit_ttl_threshold"),
         ),
-        "epr_ttl_threshold": st.number_input(
+        "epr_ttl_threshold": col2.number_input(
             "Minimum EPR TTL",
             min_value=0.0,
             max_value=1.0,
@@ -48,8 +53,9 @@ def render_decoherence_section(current: dict[str, Any]) -> dict[str, float]:
 
 def render_fidelity_section(current: dict[str, Any]) -> dict[str, float]:
     st.subheader("Fidelity")
+    col1, col2 = _two_column_inputs()
     return {
-        "epr_threshold": st.number_input(
+        "epr_threshold": col1.number_input(
             "EPR fidelity threshold",
             min_value=0.0,
             max_value=1.0,
@@ -57,7 +63,7 @@ def render_fidelity_section(current: dict[str, Any]) -> dict[str, float]:
             value=safe_probability(current["fidelity"]["epr_threshold"]),
             help=field_help("fidelity", "epr_threshold"),
         ),
-        "purification_threshold": st.number_input(
+        "purification_threshold": col2.number_input(
             "Purification threshold",
             min_value=0.0,
             max_value=1.0,
@@ -65,7 +71,7 @@ def render_fidelity_section(current: dict[str, Any]) -> dict[str, float]:
             value=safe_probability(current["fidelity"]["purification_threshold"]),
             help=field_help("fidelity", "purification_threshold"),
         ),
-        "purification_min_probability": st.number_input(
+        "purification_min_probability": col1.number_input(
             "Minimum purification probability",
             min_value=0.0,
             max_value=1.0,
@@ -73,7 +79,7 @@ def render_fidelity_section(current: dict[str, Any]) -> dict[str, float]:
             value=safe_probability(current["fidelity"]["purification_min_probability"]),
             help=field_help("fidelity", "purification_min_probability"),
         ),
-        "initial_epr_fidelity": st.number_input(
+        "initial_epr_fidelity": col2.number_input(
             "Initial EPR fidelity",
             min_value=0.0,
             max_value=1.0,
@@ -86,8 +92,9 @@ def render_fidelity_section(current: dict[str, Any]) -> dict[str, float]:
 
 def render_probability_section(current: dict[str, Any]) -> dict[str, float]:
     st.subheader("Probability")
+    col1, col2 = _two_column_inputs()
     return {
-        "epr_create_max": st.number_input(
+        "epr_create_max": col1.number_input(
             "Maximum EPR creation probability",
             min_value=0.0,
             max_value=1.0,
@@ -95,7 +102,7 @@ def render_probability_section(current: dict[str, Any]) -> dict[str, float]:
             value=safe_probability(current["probability"]["epr_create_max"]),
             help=field_help("probability", "epr_create_max"),
         ),
-        "epr_create_min": st.number_input(
+        "epr_create_min": col2.number_input(
             "Minimum EPR creation probability",
             min_value=0.0,
             max_value=1.0,
@@ -108,29 +115,30 @@ def render_probability_section(current: dict[str, Any]) -> dict[str, float]:
 
 def render_protocol_section(current: dict[str, Any]) -> dict[str, int]:
     st.subheader("Protocol")
+    col1, col2 = _two_column_inputs()
     return {
-        "link_max_attempts": st.number_input(
+        "link_max_attempts": col1.number_input(
             "Maximum link attempts",
             min_value=0,
             step=1,
             value=safe_int(current["protocol"]["link_max_attempts"]),
             help=field_help("protocol", "link_max_attempts"),
         ),
-        "link_purification_after_failures": st.number_input(
+        "link_purification_after_failures": col2.number_input(
             "Failures before purification",
             min_value=0,
             step=1,
             value=safe_int(current["protocol"]["link_purification_after_failures"]),
             help=field_help("protocol", "link_purification_after_failures"),
         ),
-        "transport_max_attempts": st.number_input(
+        "transport_max_attempts": col1.number_input(
             "Maximum transport attempts",
             min_value=0,
             step=1,
             value=safe_int(current["protocol"]["transport_max_attempts"]),
             help=field_help("protocol", "transport_max_attempts"),
         ),
-        "entanglement_max_attempts": st.number_input(
+        "entanglement_max_attempts": col2.number_input(
             "Maximum entanglement attempts",
             min_value=0,
             step=1,
@@ -142,29 +150,30 @@ def render_protocol_section(current: dict[str, Any]) -> dict[str, int]:
 
 def render_defaults_section(current: dict[str, Any]) -> dict[str, int | str]:
     st.subheader("Defaults")
+    col1, col2 = _two_column_inputs()
     defaults: dict[str, int | str] = {
-        "qubits_per_host": st.number_input(
+        "qubits_per_host": col1.number_input(
             "Qubits per host",
             min_value=0,
             step=1,
             value=safe_int(current["defaults"]["qubits_per_host"]),
             help=field_help("defaults", "qubits_per_host"),
         ),
-        "eprs_per_channel": st.number_input(
+        "eprs_per_channel": col2.number_input(
             "EPRs per channel",
             min_value=0,
             step=1,
             value=safe_int(current["defaults"]["eprs_per_channel"]),
             help=field_help("defaults", "eprs_per_channel"),
         ),
-        "qubit_regen_interval": st.number_input(
+        "qubit_regen_interval": col1.number_input(
             "Qubit regeneration interval",
             min_value=0,
             step=1,
             value=safe_int(current["defaults"].get("qubit_regen_interval", 0)),
             help=field_help("defaults", "qubit_regen_interval"),
         ),
-        "qubit_regen_amount": st.number_input(
+        "qubit_regen_amount": col2.number_input(
             "Qubit regeneration amount",
             min_value=0,
             step=1,
@@ -177,7 +186,7 @@ def render_defaults_section(current: dict[str, Any]) -> dict[str, int | str]:
     if current_noise not in NOISE_OPTIONS:
         current_noise = "random"
 
-    defaults["channel_noise_type"] = st.selectbox(
+    defaults["channel_noise_type"] = col1.selectbox(
         "Channel noise type",
         options=NOISE_OPTIONS,
         index=NOISE_OPTIONS.index(current_noise),
@@ -188,57 +197,58 @@ def render_defaults_section(current: dict[str, Any]) -> dict[str, int | str]:
 
 def render_costs_section(current: dict[str, Any]) -> dict[str, int]:
     st.subheader("Costs")
+    col1, col2 = _two_column_inputs()
     return {
-        "heralding": st.number_input(
+        "heralding": col1.number_input(
             "Heralding cost",
             min_value=0,
             step=1,
             value=safe_int(current["costs"]["heralding"]),
             help=field_help("costs", "heralding"),
         ),
-        "on_demand": st.number_input(
+        "on_demand": col2.number_input(
             "On-demand cost",
             min_value=0,
             step=1,
             value=safe_int(current["costs"]["on_demand"]),
             help=field_help("costs", "on_demand"),
         ),
-        "replay": st.number_input(
+        "replay": col1.number_input(
             "Replay cost",
             min_value=0,
             step=1,
             value=safe_int(current["costs"]["replay"]),
             help=field_help("costs", "replay"),
         ),
-        "purification": st.number_input(
+        "purification": col2.number_input(
             "Purification cost",
             min_value=0,
             step=1,
             value=safe_int(current["costs"]["purification"]),
             help=field_help("costs", "purification"),
         ),
-        "swapping": st.number_input(
+        "swapping": col1.number_input(
             "Swapping cost",
             min_value=0,
             step=1,
             value=safe_int(current["costs"]["swapping"]),
             help=field_help("costs", "swapping"),
         ),
-        "qubit_creation": st.number_input(
+        "qubit_creation": col2.number_input(
             "Qubit creation cost",
             min_value=0,
             step=1,
             value=safe_int(current["costs"]["qubit_creation"]),
             help=field_help("costs", "qubit_creation"),
         ),
-        "e91_round": st.number_input(
+        "e91_round": col1.number_input(
             "Cost per E91 round",
             min_value=0,
             step=1,
             value=safe_int(current["costs"]["e91_round"]),
             help=field_help("costs", "e91_round"),
         ),
-        "nepr_measurement": st.number_input(
+        "nepr_measurement": col2.number_input(
             "NEPR measurement cost",
             min_value=0,
             step=1,
