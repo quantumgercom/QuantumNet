@@ -75,6 +75,45 @@ def _inject_canvas_frame_style(frame_key: str) -> None:
     )
 
 
+def _inject_delete_button_style(container_key: str, is_enabled: bool) -> None:
+    enabled_color = "#dc2626"
+    enabled_hover_color = "#b91c1c"
+    disabled_color = "#6b7280"
+    base_color = enabled_color if is_enabled else disabled_color
+    hover_color = enabled_hover_color if is_enabled else disabled_color
+    border_color = base_color
+    cursor = "pointer" if is_enabled else "not-allowed"
+    st.markdown(
+        f"""
+        <style>
+        .st-key-{container_key} button {{
+            background-color: {base_color} !important;
+            color: #ffffff !important;
+            border: 1px solid {border_color} !important;
+            opacity: 1 !important;
+            cursor: {cursor} !important;
+        }}
+        .st-key-{container_key} button:hover {{
+            background-color: {hover_color} !important;
+            color: #ffffff !important;
+            border: 1px solid {border_color} !important;
+        }}
+        .st-key-{container_key} button:disabled {{
+            background-color: {disabled_color} !important;
+            color: #ffffff !important;
+            border: 1px solid {disabled_color} !important;
+            opacity: 1 !important;
+            cursor: not-allowed !important;
+        }}
+        .st-key-{container_key} button:focus {{
+            box-shadow: 0 0 0 0.2rem rgba(220, 38, 38, 0.25) !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _base_node_style() -> dict[str, Any]:
     return {
         "width": 56,
@@ -241,7 +280,33 @@ def _apply_pending_source_style(state: Any, pending_source: str | None) -> None:
         node.style = _node_style(highlighted is not None and node_id == highlighted)
 
 
-def _handle_click_to_connect(topology_path: Path) -> None:
+def _delete_node(state: Any, node_id: str) -> bool:
+    target_id = node_id.strip()
+    if not target_id:
+        return False
+
+    initial_nodes = len(state.nodes)
+    state.nodes = [node for node in state.nodes if str(node.id).strip() != target_id]
+    if len(state.nodes) == initial_nodes:
+        return False
+
+    state.edges = [
+        edge
+        for edge in state.edges
+        if str(edge.source).strip() != target_id and str(edge.target).strip() != target_id
+    ]
+    return True
+
+
+def _selected_node_id(state: Any, ids: set[str]) -> str | None:
+    selected_raw = getattr(state, "selected_id", None)
+    selected_id = str(selected_raw).strip() if selected_raw is not None else ""
+    if selected_id not in ids:
+        return None
+    return selected_id
+
+
+def _handle_canvas_interaction(topology_path: Path) -> None:
     current_state_key = _state_key(topology_path)
     pending_source_key = _pending_source_key(topology_path)
     processed_ts_key = _processed_event_timestamp_key(topology_path)
@@ -260,9 +325,8 @@ def _handle_click_to_connect(topology_path: Path) -> None:
         return
     st.session_state[processed_ts_key] = event_timestamp
 
-    selected_raw = getattr(state, "selected_id", None)
-    selected_id = str(selected_raw).strip() if selected_raw is not None else ""
-    if selected_id not in ids:
+    selected_id = _selected_node_id(state, ids)
+    if selected_id is None:
         _apply_pending_source_style(state, pending_source)
         return
 
@@ -352,6 +416,8 @@ def render_topology_editor(topology_path: Path) -> None:
         pending_source = None
         st.session_state[pending_source_key] = None
 
+    delete_enabled = pending_source is not None
+
     _apply_pending_source_style(st.session_state[current_state_key], pending_source)
 
     actions_col, canvas_col = st.columns([1, 6], gap="small")
@@ -366,17 +432,38 @@ def render_topology_editor(topology_path: Path) -> None:
             st.session_state[pending_source_key] = None
             st.session_state[processed_ts_key] = None
             pending_source = None
+            delete_enabled = False
+
+        delete_button_container_key = f"qn_delete_node_button_wrap_{_editor_id(topology_path)}"
+        delete_button_widget_key = f"qn_delete_node_button_{_editor_id(topology_path)}"
+        _inject_delete_button_style(delete_button_container_key, delete_enabled)
+        with st.container(key=delete_button_container_key):
+            delete_button_clicked = st.button(
+                "Delete node",
+                key=delete_button_widget_key,
+                use_container_width=True,
+                disabled=not delete_enabled,
+            )
+        if delete_button_clicked:
+            current_state = st.session_state[current_state_key]
+            current_timestamp = int(getattr(current_state, "timestamp", 0) or 0)
+            if pending_source is not None and _delete_node(current_state, pending_source):
+                st.session_state[pending_source_key] = None
+                st.session_state[processed_ts_key] = current_timestamp
+                _apply_pending_source_style(current_state, None)
+                st.rerun()
 
         save_button_slot = st.empty()
 
         if pending_source:
             st.info(
                 f"Node `{pending_source}` selected. Click another node to create an edge, "
-                "or click the same node to cancel."
+                "or click the same node to cancel, or click `Delete node` to remove it."
             )
         else:
             st.caption(
-                "Click one node (blue) and then another to connect."
+                "Click one node (blue) and then another to connect. "
+                "Select a node to enable `Delete node`."
             )
 
         if info_message:
@@ -403,7 +490,7 @@ def render_topology_editor(topology_path: Path) -> None:
     if updated_state is not None:
         st.session_state[current_state_key] = updated_state
 
-    _handle_click_to_connect(topology_path)
+    _handle_canvas_interaction(topology_path)
 
     save_ready = True
     try:
