@@ -1,7 +1,7 @@
 decoherence:
   per_timeslot: 0.9
   per_measurement: 0.99
-  qubit_ttl_threshold: 0.23
+  qubit_ttl_threshold: 0.25
   epr_ttl_threshold: 0.1
 fidelity:
   epr_threshold: 0.8

@@ -316,63 +316,64 @@ def render_topology_editor(topology_path: Path) -> None:
     current_state_key = _state_key(topology_path)
     pending_source_key = _pending_source_key(topology_path)
     processed_ts_key = _processed_event_timestamp_key(topology_path)
+    info_message: str | None = None
 
     if current_state_key not in st.session_state:
         loaded_state, info_message = _load_state_from_disk(topology_path)
         st.session_state[current_state_key] = loaded_state
-        if info_message:
-            st.info(info_message)
     if pending_source_key not in st.session_state:
         st.session_state[pending_source_key] = None
     if processed_ts_key not in st.session_state:
         st.session_state[processed_ts_key] = None
-
-    controls_col, reload_col = st.columns(2)
-    if controls_col.button("Add node", use_container_width=True):
-        _add_node(st.session_state[current_state_key])
-        st.rerun()
-
-    if reload_col.button("Reload from disk", use_container_width=True):
-        loaded_state, info_message = _load_state_from_disk(topology_path)
-        st.session_state[current_state_key] = loaded_state
-        st.session_state[pending_source_key] = None
-        st.session_state[processed_ts_key] = None
-        if info_message:
-            st.info(info_message)
-        st.rerun()
 
     pending_source = st.session_state.get(pending_source_key)
     if pending_source and pending_source not in _node_ids(st.session_state[current_state_key]):
         pending_source = None
         st.session_state[pending_source_key] = None
 
-    if pending_source:
-        st.info(
-            f"Node `{pending_source}` selected. Click another node to create an edge, "
-            "or click the same node to cancel."
-        )
-    else:
-        st.caption(
-            "Drag nodes to move them. Click one node (blue highlight), then click "
-            "another node to connect them."
-        )
-
     _apply_pending_source_style(st.session_state[current_state_key], pending_source)
 
-    updated_state = streamlit_flow(
-        _canvas_key(topology_path),
-        st.session_state[current_state_key],
-        height=640,
-        fit_view=True,
-        show_controls=True,
-        show_minimap=True,
-        allow_new_edges=False,
-        animate_new_edges=False,
-        get_node_on_click=True,
-        enable_pane_menu=True,
-        enable_node_menu=True,
-        enable_edge_menu=True,
-    )
+    actions_col, canvas_col = st.columns([1, 6], gap="small")
+    with actions_col:
+        if st.button("Add node", use_container_width=True):
+            _add_node(st.session_state[current_state_key])
+            st.session_state[processed_ts_key] = None
+
+        if st.button("Reload from disk", use_container_width=True):
+            loaded_state, info_message = _load_state_from_disk(topology_path)
+            st.session_state[current_state_key] = loaded_state
+            st.session_state[pending_source_key] = None
+            st.session_state[processed_ts_key] = None
+            pending_source = None
+
+        if pending_source:
+            st.info(
+                f"Node `{pending_source}` selected. Click another node to create an edge, "
+                "or click the same node to cancel."
+            )
+        else:
+            st.caption(
+                "Click one node (blue) and then another to connect."
+            )
+
+        if info_message:
+            st.info(info_message)
+
+    with canvas_col:
+        updated_state = streamlit_flow(
+            _canvas_key(topology_path),
+            st.session_state[current_state_key],
+            height=640,
+            fit_view=True,
+            show_controls=True,
+            show_minimap=False,
+            allow_new_edges=False,
+            animate_new_edges=False,
+            get_node_on_click=True,
+            enable_pane_menu=True,
+            enable_node_menu=True,
+            enable_edge_menu=True,
+        )
     if updated_state is not None:
         st.session_state[current_state_key] = updated_state
 
@@ -392,3 +393,6 @@ def render_topology_editor(topology_path: Path) -> None:
     if st.button("Save topology JSON", type="primary", disabled=not save_ready):
         save_topology_json(topology_path, spec)
         st.success(f"Topology saved to `{topology_path}`")
+    st.caption(
+        "After saving this file, use Topology type = Json in Parameters and set the same JSON filename."
+    )
