@@ -11,6 +11,9 @@ This package is organized by responsibility so new features can be added without
   - `field_metadata.py`: labels/options/help metadata.
   - `validation.py`: domain-specific validation and sanitizers.
   - `sections.py`: Streamlit sections used by the parameters form.
+- `topology/`: domain logic for the Topology editor feature.
+  - `io.py`: topology JSON path resolution and read/write.
+  - `editor.py`: Streamlit Flow editor + JSON conversion helpers.
 
 ## Adding a new feature
 

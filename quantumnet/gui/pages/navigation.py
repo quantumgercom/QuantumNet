@@ -7,6 +7,7 @@ from typing import Any
 import streamlit as st
 
 from quantumnet.gui.pages.parameters import render_parameters_page
+from quantumnet.gui.pages.topology import render_topology_page
 from quantumnet.gui.pages.version import render_version_page
 from quantumnet.metadata import REPOSITORY_URL
 
@@ -53,11 +54,15 @@ def build_navigation(config_path: Path) -> Any:
     def _version_page() -> None:
         render_version_page()
 
+    def _topology_page() -> None:
+        render_topology_page()
+
     _render_sidebar_brand()
 
     return st.navigation(
         [
             st.Page(_parameters_page, title="Parameters", url_path="parameters", default=True),
+            st.Page(_topology_page, title="Topology", url_path="topology"),
             st.Page(_version_page, title="Version", url_path="version"),
         ],
         position="sidebar",
