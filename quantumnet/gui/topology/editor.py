@@ -367,6 +367,8 @@ def render_topology_editor(topology_path: Path) -> None:
             st.session_state[processed_ts_key] = None
             pending_source = None
 
+        save_button_slot = st.empty()
+
         if pending_source:
             st.info(
                 f"Node `{pending_source}` selected. Click another node to create an edge, "
@@ -414,9 +416,16 @@ def render_topology_editor(topology_path: Path) -> None:
     st.subheader("JSON preview")
     st.json(spec)
 
-    if st.button("Save topology JSON", type="primary", disabled=not save_ready):
-        save_topology_json(topology_path, spec)
-        st.success(f"Topology saved to `{topology_path}`")
+    with save_button_slot:
+        if st.button(
+            "Save JSON",
+            type="primary",
+            disabled=not save_ready,
+            use_container_width=True,
+        ):
+            save_topology_json(topology_path, spec)
+            st.success(f"Topology saved to `{topology_path}`")
+
     st.caption(
         "After saving this file, use Topology type = Json in Parameters and set the same JSON filename."
     )
