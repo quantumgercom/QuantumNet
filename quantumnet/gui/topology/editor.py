@@ -46,6 +46,38 @@ def _canvas_key(topology_path: Path) -> str:
     return f"qn_topology_flow_canvas_{_editor_id(topology_path)}"
 
 
+def _pending_source_key(topology_path: Path) -> str:
+    return f"qn_topology_pending_source_{_editor_id(topology_path)}"
+
+
+def _processed_event_timestamp_key(topology_path: Path) -> str:
+    return f"qn_topology_processed_ts_{_editor_id(topology_path)}"
+
+
+def _base_node_style() -> dict[str, Any]:
+    return {
+        "width": 56,
+        "height": 56,
+        "borderRadius": "50%",
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "padding": 0,
+        "fontWeight": 600,
+        "border": "2px solid #64748b",
+        "background": "#ffffff",
+        "transition": "border-color 120ms ease, box-shadow 120ms ease",
+    }
+
+
+def _node_style(is_pending_source: bool) -> dict[str, Any]:
+    style = _base_node_style()
+    if is_pending_source:
+        style["border"] = "2px solid #2563eb"
+        style["boxShadow"] = "0 0 0 4px rgba(37, 99, 235, 0.25)"
+    return style
+
+
 def _default_node(node_id: str, position: tuple[float, float]) -> Any:
     return StreamlitFlowNode(
         id=node_id,
@@ -54,20 +86,11 @@ def _default_node(node_id: str, position: tuple[float, float]) -> Any:
         node_type="default",
         source_position="bottom",
         target_position="top",
-        connectable=True,
+        connectable=False,
         selectable=True,
         deletable=True,
         draggable=True,
-        style={
-            "width": 56,
-            "height": 56,
-            "borderRadius": "50%",
-            "display": "flex",
-            "alignItems": "center",
-            "justifyContent": "center",
-            "padding": 0,
-            "fontWeight": 600,
-        },
+        style=_node_style(False),
     )
 
 
@@ -135,6 +158,105 @@ def _state_to_json_spec(state: Any) -> dict[str, Any]:
     return {"hosts": hosts}
 
 
+def _canonical_edge_pair(source: str, target: str) -> tuple[str, str]:
+    ordered = _sort_node_ids([source, target])
+    return ordered[0], ordered[1]
+
+
+def _edge_exists_undirected(state: Any, source: str, target: str) -> bool:
+    pair = _canonical_edge_pair(source, target)
+    for edge in state.edges:
+        edge_source = str(edge.source).strip()
+        edge_target = str(edge.target).strip()
+        if not edge_source or not edge_target:
+            continue
+        if _canonical_edge_pair(edge_source, edge_target) == pair:
+            return True
+    return False
+
+
+def _next_edge_id(state: Any, source: str, target: str) -> str:
+    base = f"{source}<->{target}"
+    existing = {str(edge.id).strip() for edge in state.edges}
+    if base not in existing:
+        return base
+
+    suffix = 1
+    while True:
+        candidate = f"{base}#{suffix}"
+        if candidate not in existing:
+            return candidate
+        suffix += 1
+
+
+def _add_edge_by_click(state: Any, source: str, target: str) -> bool:
+    source_id = source.strip()
+    target_id = target.strip()
+    if not source_id or not target_id or source_id == target_id:
+        return False
+    if _edge_exists_undirected(state, source_id, target_id):
+        return False
+
+    left, right = _canonical_edge_pair(source_id, target_id)
+    state.edges.append(
+        StreamlitFlowEdge(
+            id=_next_edge_id(state, left, right),
+            source=left,
+            target=right,
+            deletable=True,
+        )
+    )
+    return True
+
+
+def _node_ids(state: Any) -> set[str]:
+    return {str(node.id).strip() for node in state.nodes if str(node.id).strip()}
+
+
+def _apply_pending_source_style(state: Any, pending_source: str | None) -> None:
+    highlighted = pending_source.strip() if pending_source else None
+    for node in state.nodes:
+        node_id = str(node.id).strip()
+        node.style = _node_style(highlighted is not None and node_id == highlighted)
+
+
+def _handle_click_to_connect(topology_path: Path) -> None:
+    current_state_key = _state_key(topology_path)
+    pending_source_key = _pending_source_key(topology_path)
+    processed_ts_key = _processed_event_timestamp_key(topology_path)
+
+    state = st.session_state[current_state_key]
+    ids = _node_ids(state)
+
+    pending_source = st.session_state.get(pending_source_key)
+    if pending_source not in ids:
+        pending_source = None
+        st.session_state[pending_source_key] = None
+
+    event_timestamp = int(getattr(state, "timestamp", 0) or 0)
+    if event_timestamp == st.session_state.get(processed_ts_key):
+        _apply_pending_source_style(state, pending_source)
+        return
+    st.session_state[processed_ts_key] = event_timestamp
+
+    selected_raw = getattr(state, "selected_id", None)
+    selected_id = str(selected_raw).strip() if selected_raw is not None else ""
+    if selected_id not in ids:
+        _apply_pending_source_style(state, pending_source)
+        return
+
+    if pending_source is None:
+        st.session_state[pending_source_key] = selected_id
+    elif selected_id == pending_source:
+        st.session_state[pending_source_key] = None
+    else:
+        _add_edge_by_click(state, pending_source, selected_id)
+        st.session_state[pending_source_key] = None
+
+    _apply_pending_source_style(state, st.session_state.get(pending_source_key))
+    st.rerun()
+
+
 def _next_node_id(existing_ids: list[str]) -> str:
     if not existing_ids:
         return "0"
@@ -192,11 +314,18 @@ def render_topology_editor(topology_path: Path) -> None:
         return
 
     current_state_key = _state_key(topology_path)
+    pending_source_key = _pending_source_key(topology_path)
+    processed_ts_key = _processed_event_timestamp_key(topology_path)
+
     if current_state_key not in st.session_state:
         loaded_state, info_message = _load_state_from_disk(topology_path)
         st.session_state[current_state_key] = loaded_state
         if info_message:
             st.info(info_message)
+    if pending_source_key not in st.session_state:
+        st.session_state[pending_source_key] = None
+    if processed_ts_key not in st.session_state:
+        st.session_state[processed_ts_key] = None
 
     controls_col, reload_col = st.columns(2)
     if controls_col.button("Add node", use_container_width=True):
@@ -206,13 +335,29 @@ def render_topology_editor(topology_path: Path) -> None:
     if reload_col.button("Reload from disk", use_container_width=True):
         loaded_state, info_message = _load_state_from_disk(topology_path)
         st.session_state[current_state_key] = loaded_state
+        st.session_state[pending_source_key] = None
+        st.session_state[processed_ts_key] = None
         if info_message:
             st.info(info_message)
         st.rerun()
 
-    st.caption(
-        "Drag nodes to move them. Create edges by dragging from a node handle to another node."
-    )
+    pending_source = st.session_state.get(pending_source_key)
+    if pending_source and pending_source not in _node_ids(st.session_state[current_state_key]):
+        pending_source = None
+        st.session_state[pending_source_key] = None
+
+    if pending_source:
+        st.info(
+            f"Node `{pending_source}` selected. Click another node to create an edge, "
+            "or click the same node to cancel."
+        )
+    else:
+        st.caption(
+            "Drag nodes to move them. Click one node (blue highlight), then click "
+            "another node to connect them."
+        )
+
+    _apply_pending_source_style(st.session_state[current_state_key], pending_source)
 
     updated_state = streamlit_flow(
         _canvas_key(topology_path),
@@ -221,14 +366,17 @@ def render_topology_editor(topology_path: Path) -> None:
         fit_view=True,
         show_controls=True,
         show_minimap=True,
-        allow_new_edges=True,
+        allow_new_edges=False,
         animate_new_edges=False,
+        get_node_on_click=True,
         enable_pane_menu=True,
         enable_node_menu=True,
         enable_edge_menu=True,
     )
     if updated_state is not None:
         st.session_state[current_state_key] = updated_state
+
+    _handle_click_to_connect(topology_path)
 
     save_ready = True
     try:
