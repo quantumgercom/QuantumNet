@@ -46,12 +46,40 @@ def _canvas_key(topology_path: Path) -> str:
     return f"qn_topology_flow_canvas_{_editor_id(topology_path)}"
 
 
+def _canvas_frame_key(topology_path: Path) -> str:
+    return f"qn_topology_flow_frame_{_editor_id(topology_path)}"
+
+
 def _pending_source_key(topology_path: Path) -> str:
     return f"qn_topology_pending_source_{_editor_id(topology_path)}"
 
 
 def _processed_event_timestamp_key(topology_path: Path) -> str:
     return f"qn_topology_processed_ts_{_editor_id(topology_path)}"
+
+
+def _inject_canvas_frame_style(frame_key: str) -> None:
+    st.markdown(
+        f"""
+        <style>
+        .st-key-{frame_key} {{
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            overflow: hidden;
+            padding: 0 !important;
+        }}
+        html[data-theme="light"] .st-key-{frame_key},
+        body[data-theme="light"] .st-key-{frame_key} {{
+            border-color: #000000 !important;
+        }}
+        html[data-theme="dark"] .st-key-{frame_key},
+        body[data-theme="dark"] .st-key-{frame_key} {{
+            border-color: #ffffff !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _base_node_style() -> dict[str, Any]:
@@ -360,20 +388,23 @@ def render_topology_editor(topology_path: Path) -> None:
             st.info(info_message)
 
     with canvas_col:
-        updated_state = streamlit_flow(
-            _canvas_key(topology_path),
-            st.session_state[current_state_key],
-            height=640,
-            fit_view=True,
-            show_controls=True,
-            show_minimap=False,
-            allow_new_edges=False,
-            animate_new_edges=False,
-            get_node_on_click=True,
-            enable_pane_menu=True,
-            enable_node_menu=True,
-            enable_edge_menu=True,
-        )
+        frame_key = _canvas_frame_key(topology_path)
+        _inject_canvas_frame_style(frame_key)
+        with st.container(key=frame_key):
+            updated_state = streamlit_flow(
+                _canvas_key(topology_path),
+                st.session_state[current_state_key],
+                height=640,
+                fit_view=True,
+                show_controls=True,
+                show_minimap=False,
+                allow_new_edges=False,
+                animate_new_edges=False,
+                get_node_on_click=True,
+                enable_pane_menu=True,
+                enable_node_menu=True,
+                enable_edge_menu=True,
+            )
     if updated_state is not None:
         st.session_state[current_state_key] = updated_state
 
