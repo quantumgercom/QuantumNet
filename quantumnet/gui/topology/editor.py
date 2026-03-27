@@ -54,8 +54,20 @@ def _pending_source_key(topology_path: Path) -> str:
     return f"qn_topology_pending_source_{_editor_id(topology_path)}"
 
 
+def _selected_node_key(topology_path: Path) -> str:
+    return f"qn_topology_selected_node_{_editor_id(topology_path)}"
+
+
 def _selected_edge_key(topology_path: Path) -> str:
     return f"qn_topology_selected_edge_{_editor_id(topology_path)}"
+
+
+def _last_node_click_key(topology_path: Path) -> str:
+    return f"qn_topology_last_node_click_{_editor_id(topology_path)}"
+
+
+def _node_selection_set_ts_key(topology_path: Path) -> str:
+    return f"qn_topology_node_selection_set_ts_{_editor_id(topology_path)}"
 
 
 def _processed_event_timestamp_key(topology_path: Path) -> str:
@@ -349,8 +361,13 @@ def _selected_edge_id(state: Any, ids: set[str]) -> str | None:
 def _handle_canvas_interaction(topology_path: Path) -> None:
     current_state_key = _state_key(topology_path)
     pending_source_key = _pending_source_key(topology_path)
+    selected_node_state_key = _selected_node_key(topology_path)
     selected_edge_state_key = _selected_edge_key(topology_path)
+    last_node_click_state_key = _last_node_click_key(topology_path)
+    node_selection_set_ts_state_key = _node_selection_set_ts_key(topology_path)
     processed_ts_key = _processed_event_timestamp_key(topology_path)
+    double_click_ms = 450
+    ignore_auto_null_event_ms = 1000
 
     state = st.session_state[current_state_key]
     node_ids = _node_ids(state)
@@ -360,6 +377,9 @@ def _handle_canvas_interaction(topology_path: Path) -> None:
     if pending_source not in node_ids:
         pending_source = None
         st.session_state[pending_source_key] = None
+    selected_node_state = st.session_state.get(selected_node_state_key)
+    if selected_node_state not in node_ids:
+        st.session_state[selected_node_state_key] = None
 
     event_timestamp = int(getattr(state, "timestamp", 0) or 0)
     if event_timestamp == st.session_state.get(processed_ts_key):
@@ -373,23 +393,72 @@ def _handle_canvas_interaction(topology_path: Path) -> None:
     if selected_node_id is None:
         if selected_edge_id is not None:
             st.session_state[selected_edge_state_key] = selected_edge_id
+            st.session_state[selected_node_state_key] = None
+            st.session_state[last_node_click_state_key] = {"id": None, "ts": 0}
+            st.session_state[node_selection_set_ts_state_key] = 0
             if pending_source is not None:
                 st.session_state[pending_source_key] = None
                 _apply_pending_source_style(state, None)
             _clear_component_selection(state)
+            st.rerun()
+        has_active_node_selection = st.session_state.get(selected_node_state_key) is not None
+        if pending_source is not None or has_active_node_selection:
+            selected_set_ts = int(st.session_state.get(node_selection_set_ts_state_key) or 0)
+            if (
+                has_active_node_selection
+                and selected_set_ts > 0
+                and 0 <= (event_timestamp - selected_set_ts) <= ignore_auto_null_event_ms
+            ):
+                _apply_pending_source_style(state, pending_source)
+                return
+            st.session_state[pending_source_key] = None
+            st.session_state[selected_node_state_key] = None
+            st.session_state[last_node_click_state_key] = {"id": None, "ts": 0}
+            st.session_state[node_selection_set_ts_state_key] = 0
+            _clear_component_selection(state)
+            _apply_pending_source_style(state, None)
             st.rerun()
         _apply_pending_source_style(state, pending_source)
         return
 
     st.session_state[selected_edge_state_key] = None
 
-    if pending_source is None:
-        st.session_state[pending_source_key] = selected_node_id
-    elif selected_node_id == pending_source:
-        st.session_state[pending_source_key] = None
-    else:
-        _add_edge_by_click(state, pending_source, selected_node_id)
-        st.session_state[pending_source_key] = None
+    last_click = st.session_state.get(last_node_click_state_key, {"id": None, "ts": 0})
+    last_id = str(last_click.get("id") or "")
+    last_ts = int(last_click.get("ts") or 0)
+    is_double_click = (
+        last_id == selected_node_id and 0 < (event_timestamp - last_ts) <= double_click_ms
+    )
+
+    if pending_source is not None:
+        st.session_state[last_node_click_state_key] = {"id": None, "ts": 0}
+        st.session_state[selected_node_state_key] = selected_node_id
+        st.session_state[node_selection_set_ts_state_key] = event_timestamp
+
+        if selected_node_id == pending_source:
+            st.session_state[pending_source_key] = None
+        else:
+            _add_edge_by_click(state, pending_source, selected_node_id)
+            st.session_state[pending_source_key] = None
+
+        _clear_component_selection(state)
+        _apply_pending_source_style(state, st.session_state.get(pending_source_key))
+        st.rerun()
+
+    if not is_double_click:
+        st.session_state[last_node_click_state_key] = {
+            "id": selected_node_id,
+            "ts": event_timestamp,
+        }
+        _clear_component_selection(state)
+        _apply_pending_source_style(state, st.session_state.get(pending_source_key))
+        st.rerun()
+
+    st.session_state[last_node_click_state_key] = {"id": None, "ts": 0}
+    st.session_state[selected_node_state_key] = selected_node_id
+    st.session_state[node_selection_set_ts_state_key] = event_timestamp
+
+    st.session_state[pending_source_key] = selected_node_id
 
     _clear_component_selection(state)
     _apply_pending_source_style(state, st.session_state.get(pending_source_key))
@@ -454,7 +523,10 @@ def render_topology_editor(topology_path: Path) -> None:
 
     current_state_key = _state_key(topology_path)
     pending_source_key = _pending_source_key(topology_path)
+    selected_node_state_key = _selected_node_key(topology_path)
     selected_edge_state_key = _selected_edge_key(topology_path)
+    last_node_click_state_key = _last_node_click_key(topology_path)
+    node_selection_set_ts_state_key = _node_selection_set_ts_key(topology_path)
     processed_ts_key = _processed_event_timestamp_key(topology_path)
     info_message: str | None = None
 
@@ -463,15 +535,29 @@ def render_topology_editor(topology_path: Path) -> None:
         st.session_state[current_state_key] = loaded_state
     if pending_source_key not in st.session_state:
         st.session_state[pending_source_key] = None
+    if selected_node_state_key not in st.session_state:
+        st.session_state[selected_node_state_key] = None
     if selected_edge_state_key not in st.session_state:
         st.session_state[selected_edge_state_key] = None
+    if last_node_click_state_key not in st.session_state:
+        st.session_state[last_node_click_state_key] = {"id": None, "ts": 0}
+    if node_selection_set_ts_state_key not in st.session_state:
+        st.session_state[node_selection_set_ts_state_key] = 0
     if processed_ts_key not in st.session_state:
         st.session_state[processed_ts_key] = None
 
+    current_node_ids = _node_ids(st.session_state[current_state_key])
+
     pending_source = st.session_state.get(pending_source_key)
-    if pending_source and pending_source not in _node_ids(st.session_state[current_state_key]):
+    if pending_source and pending_source not in current_node_ids:
         pending_source = None
         st.session_state[pending_source_key] = None
+
+    selected_node = st.session_state.get(selected_node_state_key)
+    if selected_node not in current_node_ids:
+        selected_node = None
+        st.session_state[selected_node_state_key] = None
+        st.session_state[node_selection_set_ts_state_key] = 0
 
     current_edge_ids = _edge_ids(st.session_state[current_state_key])
     selected_edge = st.session_state.get(selected_edge_state_key)
@@ -482,6 +568,10 @@ def render_topology_editor(topology_path: Path) -> None:
     if selected_edge is not None and pending_source is not None:
         pending_source = None
         st.session_state[pending_source_key] = None
+    if selected_edge is not None and selected_node is not None:
+        selected_node = None
+        st.session_state[selected_node_state_key] = None
+        st.session_state[node_selection_set_ts_state_key] = 0
 
     _apply_pending_source_style(st.session_state[current_state_key], pending_source)
     _enforce_straight_edges(st.session_state[current_state_key])
@@ -497,12 +587,16 @@ def render_topology_editor(topology_path: Path) -> None:
             loaded_state, info_message = _load_state_from_disk(topology_path)
             st.session_state[current_state_key] = loaded_state
             st.session_state[pending_source_key] = None
+            st.session_state[selected_node_state_key] = None
             st.session_state[selected_edge_state_key] = None
+            st.session_state[last_node_click_state_key] = {"id": None, "ts": 0}
+            st.session_state[node_selection_set_ts_state_key] = 0
             st.session_state[processed_ts_key] = None
             pending_source = None
+            selected_node = None
             selected_edge = None
 
-        delete_node_enabled = pending_source is not None
+        delete_node_enabled = selected_node is not None
         delete_edge_enabled = selected_edge is not None
 
         delete_node_button_clicked = st.button(
@@ -521,9 +615,13 @@ def render_topology_editor(topology_path: Path) -> None:
         if delete_node_button_clicked:
             current_state = st.session_state[current_state_key]
             current_timestamp = int(getattr(current_state, "timestamp", 0) or 0)
-            if pending_source is not None and _delete_node(current_state, pending_source):
+            node_to_delete = selected_node
+            if node_to_delete is not None and _delete_node(current_state, node_to_delete):
                 st.session_state[pending_source_key] = None
+                st.session_state[selected_node_state_key] = None
                 st.session_state[selected_edge_state_key] = None
+                st.session_state[last_node_click_state_key] = {"id": None, "ts": 0}
+                st.session_state[node_selection_set_ts_state_key] = 0
                 st.session_state[processed_ts_key] = current_timestamp
                 _clear_component_selection(current_state)
                 _apply_pending_source_style(current_state, None)
@@ -535,6 +633,7 @@ def render_topology_editor(topology_path: Path) -> None:
             current_timestamp = int(getattr(current_state, "timestamp", 0) or 0)
             if selected_edge is not None and _delete_edge(current_state, selected_edge):
                 st.session_state[selected_edge_state_key] = None
+                st.session_state[node_selection_set_ts_state_key] = 0
                 st.session_state[processed_ts_key] = current_timestamp
                 _clear_component_selection(current_state)
                 _apply_selected_edge_style(current_state, None)
@@ -544,8 +643,14 @@ def render_topology_editor(topology_path: Path) -> None:
 
         if pending_source:
             st.info(
-                f"Node `{pending_source}` selected. Click another node to create an edge, "
-                "or click the same node to cancel, or click `Delete node` to remove it."
+                f"Connection mode on node `{pending_source}`. "
+                "Click another node to create an edge (double click also works), "
+                "or click the same node to cancel."
+            )
+        elif selected_node:
+            st.info(
+                f"Node `{selected_node}` selected. Double click this node to start a new connection, "
+                "or click `Delete node` to remove it."
             )
         elif selected_edge:
             st.info(
@@ -553,7 +658,7 @@ def render_topology_editor(topology_path: Path) -> None:
             )
         else:
             st.caption(
-                "Click one node (blue) and then another to connect. "
+                "Single click only moves/arranges nodes. Double click a node to select/connect. "
                 "Select a node to enable `Delete node` or select a connection to enable `Delete connection`."
             )
 
