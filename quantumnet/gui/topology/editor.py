@@ -892,8 +892,8 @@ def render_topology_editor(topology_path: Path) -> None:
         spec = {}
         st.warning(str(exc))
 
-    st.subheader("JSON preview")
-    st.json(spec)
+    with st.expander("JSON preview", expanded=False):
+        st.json(spec)
 
     if save_button_slot is not None:
         with save_button_slot:
