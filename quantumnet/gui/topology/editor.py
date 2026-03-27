@@ -54,6 +54,10 @@ def _pending_source_key(topology_path: Path) -> str:
     return f"qn_topology_pending_source_{_editor_id(topology_path)}"
 
 
+def _selected_edge_key(topology_path: Path) -> str:
+    return f"qn_topology_selected_edge_{_editor_id(topology_path)}"
+
+
 def _processed_event_timestamp_key(topology_path: Path) -> str:
     return f"qn_topology_processed_ts_{_editor_id(topology_path)}"
 
@@ -68,45 +72,6 @@ def _inject_canvas_frame_style(frame_key: str) -> None:
             border-radius: 8px !important;
             overflow: hidden;
             padding: 0 !important;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _inject_delete_button_style(container_key: str, is_enabled: bool) -> None:
-    enabled_color = "#dc2626"
-    enabled_hover_color = "#b91c1c"
-    disabled_color = "#6b7280"
-    base_color = enabled_color if is_enabled else disabled_color
-    hover_color = enabled_hover_color if is_enabled else disabled_color
-    border_color = base_color
-    cursor = "pointer" if is_enabled else "not-allowed"
-    st.markdown(
-        f"""
-        <style>
-        .st-key-{container_key} button {{
-            background-color: {base_color} !important;
-            color: #ffffff !important;
-            border: 1px solid {border_color} !important;
-            opacity: 1 !important;
-            cursor: {cursor} !important;
-        }}
-        .st-key-{container_key} button:hover {{
-            background-color: {hover_color} !important;
-            color: #ffffff !important;
-            border: 1px solid {border_color} !important;
-        }}
-        .st-key-{container_key} button:disabled {{
-            background-color: {disabled_color} !important;
-            color: #ffffff !important;
-            border: 1px solid {disabled_color} !important;
-            opacity: 1 !important;
-            cursor: not-allowed !important;
-        }}
-        .st-key-{container_key} button:focus {{
-            box-shadow: 0 0 0 0.2rem rgba(220, 38, 38, 0.25) !important;
         }}
         </style>
         """,
@@ -180,6 +145,7 @@ def _state_from_json_spec(spec: Any) -> Any:
                 id=edge_id,
                 source=source_id,
                 target=target_id,
+                edge_type="straight",
                 deletable=True,
             )
         )
@@ -263,6 +229,7 @@ def _add_edge_by_click(state: Any, source: str, target: str) -> bool:
             id=_next_edge_id(state, left, right),
             source=left,
             target=right,
+            edge_type="straight",
             deletable=True,
         )
     )
@@ -273,11 +240,38 @@ def _node_ids(state: Any) -> set[str]:
     return {str(node.id).strip() for node in state.nodes if str(node.id).strip()}
 
 
+def _edge_ids(state: Any) -> set[str]:
+    return {str(edge.id).strip() for edge in state.edges if str(edge.id).strip()}
+
+
 def _apply_pending_source_style(state: Any, pending_source: str | None) -> None:
     highlighted = pending_source.strip() if pending_source else None
     for node in state.nodes:
         node_id = str(node.id).strip()
         node.style = _node_style(highlighted is not None and node_id == highlighted)
+
+
+def _enforce_straight_edges(state: Any) -> None:
+    for edge in state.edges:
+        edge.edge_type = "straight"
+
+
+def _apply_selected_edge_style(state: Any, selected_edge_id: str | None) -> None:
+    highlighted = selected_edge_id.strip() if selected_edge_id else None
+    for edge in state.edges:
+        edge_id = str(edge.id).strip()
+        if highlighted is not None and edge_id == highlighted:
+            edge.style = {"stroke": "#2563eb", "strokeWidth": 3}
+        else:
+            edge.style = {}
+
+
+def _clear_component_selection(state: Any) -> None:
+    state.selected_id = None
+    for node in state.nodes:
+        node.selected = False
+    for edge in state.edges:
+        edge.selected = False
 
 
 def _delete_node(state: Any, node_id: str) -> bool:
@@ -298,24 +292,72 @@ def _delete_node(state: Any, node_id: str) -> bool:
     return True
 
 
-def _selected_node_id(state: Any, ids: set[str]) -> str | None:
+def _delete_edge(state: Any, edge_id: str) -> bool:
+    target_id = edge_id.strip()
+    if not target_id:
+        return False
+
+    initial_edges = len(state.edges)
+    state.edges = [edge for edge in state.edges if str(edge.id).strip() != target_id]
+    return len(state.edges) != initial_edges
+
+
+def _selected_id_candidates(state: Any) -> list[str]:
     selected_raw = getattr(state, "selected_id", None)
     selected_id = str(selected_raw).strip() if selected_raw is not None else ""
-    if selected_id not in ids:
-        return None
-    return selected_id
+    if not selected_id:
+        return []
+
+    candidates: list[str] = [selected_id]
+    for prefix in ("reactflow__node-", "reactflow__edge-"):
+        if selected_id.startswith(prefix):
+            candidates.append(selected_id[len(prefix):])
+
+    deduped: list[str] = []
+    for value in candidates:
+        if value and value not in deduped:
+            deduped.append(value)
+    return deduped
+
+
+def _selected_node_id(state: Any, ids: set[str]) -> str | None:
+    for candidate in _selected_id_candidates(state):
+        if candidate in ids:
+            return candidate
+
+    for node in state.nodes:
+        if getattr(node, "selected", False):
+            node_id = str(node.id).strip()
+            if node_id in ids:
+                return node_id
+    return None
+
+
+def _selected_edge_id(state: Any, ids: set[str]) -> str | None:
+    for candidate in _selected_id_candidates(state):
+        if candidate in ids:
+            return candidate
+
+    for edge in state.edges:
+        if getattr(edge, "selected", False):
+            edge_id = str(edge.id).strip()
+            if edge_id in ids:
+                return edge_id
+    return None
 
 
 def _handle_canvas_interaction(topology_path: Path) -> None:
     current_state_key = _state_key(topology_path)
     pending_source_key = _pending_source_key(topology_path)
+    selected_edge_state_key = _selected_edge_key(topology_path)
     processed_ts_key = _processed_event_timestamp_key(topology_path)
 
     state = st.session_state[current_state_key]
-    ids = _node_ids(state)
+    node_ids = _node_ids(state)
+    edge_ids = _edge_ids(state)
 
     pending_source = st.session_state.get(pending_source_key)
-    if pending_source not in ids:
+    if pending_source not in node_ids:
         pending_source = None
         st.session_state[pending_source_key] = None
 
@@ -325,19 +367,31 @@ def _handle_canvas_interaction(topology_path: Path) -> None:
         return
     st.session_state[processed_ts_key] = event_timestamp
 
-    selected_id = _selected_node_id(state, ids)
-    if selected_id is None:
+    selected_node_id = _selected_node_id(state, node_ids)
+    selected_edge_id = _selected_edge_id(state, edge_ids)
+
+    if selected_node_id is None:
+        if selected_edge_id is not None:
+            st.session_state[selected_edge_state_key] = selected_edge_id
+            if pending_source is not None:
+                st.session_state[pending_source_key] = None
+                _apply_pending_source_style(state, None)
+            _clear_component_selection(state)
+            st.rerun()
         _apply_pending_source_style(state, pending_source)
         return
 
+    st.session_state[selected_edge_state_key] = None
+
     if pending_source is None:
-        st.session_state[pending_source_key] = selected_id
-    elif selected_id == pending_source:
+        st.session_state[pending_source_key] = selected_node_id
+    elif selected_node_id == pending_source:
         st.session_state[pending_source_key] = None
     else:
-        _add_edge_by_click(state, pending_source, selected_id)
+        _add_edge_by_click(state, pending_source, selected_node_id)
         st.session_state[pending_source_key] = None
 
+    _clear_component_selection(state)
     _apply_pending_source_style(state, st.session_state.get(pending_source_key))
     st.rerun()
 
@@ -400,6 +454,7 @@ def render_topology_editor(topology_path: Path) -> None:
 
     current_state_key = _state_key(topology_path)
     pending_source_key = _pending_source_key(topology_path)
+    selected_edge_state_key = _selected_edge_key(topology_path)
     processed_ts_key = _processed_event_timestamp_key(topology_path)
     info_message: str | None = None
 
@@ -408,6 +463,8 @@ def render_topology_editor(topology_path: Path) -> None:
         st.session_state[current_state_key] = loaded_state
     if pending_source_key not in st.session_state:
         st.session_state[pending_source_key] = None
+    if selected_edge_state_key not in st.session_state:
+        st.session_state[selected_edge_state_key] = None
     if processed_ts_key not in st.session_state:
         st.session_state[processed_ts_key] = None
 
@@ -416,9 +473,19 @@ def render_topology_editor(topology_path: Path) -> None:
         pending_source = None
         st.session_state[pending_source_key] = None
 
-    delete_enabled = pending_source is not None
+    current_edge_ids = _edge_ids(st.session_state[current_state_key])
+    selected_edge = st.session_state.get(selected_edge_state_key)
+    if selected_edge not in current_edge_ids:
+        selected_edge = None
+        st.session_state[selected_edge_state_key] = None
+
+    if selected_edge is not None and pending_source is not None:
+        pending_source = None
+        st.session_state[pending_source_key] = None
 
     _apply_pending_source_style(st.session_state[current_state_key], pending_source)
+    _enforce_straight_edges(st.session_state[current_state_key])
+    _apply_selected_edge_style(st.session_state[current_state_key], selected_edge)
 
     actions_col, canvas_col = st.columns([1, 6], gap="small")
     with actions_col:
@@ -430,27 +497,47 @@ def render_topology_editor(topology_path: Path) -> None:
             loaded_state, info_message = _load_state_from_disk(topology_path)
             st.session_state[current_state_key] = loaded_state
             st.session_state[pending_source_key] = None
+            st.session_state[selected_edge_state_key] = None
             st.session_state[processed_ts_key] = None
             pending_source = None
-            delete_enabled = False
+            selected_edge = None
 
-        delete_button_container_key = f"qn_delete_node_button_wrap_{_editor_id(topology_path)}"
-        delete_button_widget_key = f"qn_delete_node_button_{_editor_id(topology_path)}"
-        _inject_delete_button_style(delete_button_container_key, delete_enabled)
-        with st.container(key=delete_button_container_key):
-            delete_button_clicked = st.button(
-                "Delete node",
-                key=delete_button_widget_key,
-                use_container_width=True,
-                disabled=not delete_enabled,
-            )
-        if delete_button_clicked:
+        delete_node_enabled = pending_source is not None
+        delete_edge_enabled = selected_edge is not None
+
+        delete_node_button_clicked = st.button(
+            "Delete node",
+            type="primary" if delete_node_enabled else "secondary",
+            use_container_width=True,
+            disabled=not delete_node_enabled,
+        )
+        delete_edge_button_clicked = st.button(
+            "Delete connection",
+            type="primary" if delete_edge_enabled else "secondary",
+            use_container_width=True,
+            disabled=not delete_edge_enabled,
+        )
+
+        if delete_node_button_clicked:
             current_state = st.session_state[current_state_key]
             current_timestamp = int(getattr(current_state, "timestamp", 0) or 0)
             if pending_source is not None and _delete_node(current_state, pending_source):
                 st.session_state[pending_source_key] = None
+                st.session_state[selected_edge_state_key] = None
                 st.session_state[processed_ts_key] = current_timestamp
+                _clear_component_selection(current_state)
                 _apply_pending_source_style(current_state, None)
+                _apply_selected_edge_style(current_state, None)
+                st.rerun()
+
+        if delete_edge_button_clicked:
+            current_state = st.session_state[current_state_key]
+            current_timestamp = int(getattr(current_state, "timestamp", 0) or 0)
+            if selected_edge is not None and _delete_edge(current_state, selected_edge):
+                st.session_state[selected_edge_state_key] = None
+                st.session_state[processed_ts_key] = current_timestamp
+                _clear_component_selection(current_state)
+                _apply_selected_edge_style(current_state, None)
                 st.rerun()
 
         save_button_slot = st.empty()
@@ -460,10 +547,14 @@ def render_topology_editor(topology_path: Path) -> None:
                 f"Node `{pending_source}` selected. Click another node to create an edge, "
                 "or click the same node to cancel, or click `Delete node` to remove it."
             )
+        elif selected_edge:
+            st.info(
+                f"Connection `{selected_edge}` selected. Click `Delete connection` to remove it."
+            )
         else:
             st.caption(
                 "Click one node (blue) and then another to connect. "
-                "Select a node to enable `Delete node`."
+                "Select a node to enable `Delete node` or select a connection to enable `Delete connection`."
             )
 
         if info_message:
@@ -483,12 +574,21 @@ def render_topology_editor(topology_path: Path) -> None:
                 allow_new_edges=False,
                 animate_new_edges=False,
                 get_node_on_click=True,
-                enable_pane_menu=True,
-                enable_node_menu=True,
-                enable_edge_menu=True,
+                get_edge_on_click=True,
+                enable_pane_menu=False,
+                enable_node_menu=False,
+                enable_edge_menu=False,
             )
     if updated_state is not None:
         st.session_state[current_state_key] = updated_state
+        _enforce_straight_edges(st.session_state[current_state_key])
+        _apply_selected_edge_style(
+            st.session_state[current_state_key],
+            _selected_edge_id(
+                st.session_state[current_state_key],
+                _edge_ids(st.session_state[current_state_key]),
+            ),
+        )
 
     _handle_canvas_interaction(topology_path)
 
