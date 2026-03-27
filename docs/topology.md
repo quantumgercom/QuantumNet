@@ -120,11 +120,11 @@ Network(clock: Clock = None, config: SimulationConfig = None)
 
 ### Métodos Públicos
 
-#### `set_ready_topology(topology_name, *args)`
+#### `set_ready_topology()`
 
-Cria o grafo com uma das topologias prontas para uso. Após criar o grafo, inicializa hosts, canais e pares EPR automaticamente.
+Cria o grafo com uma das topologias prontas definidas em `config.topology`. Após criar o grafo, inicializa hosts, canais e pares EPR automaticamente.
 
-| Topologia | Argumentos | Descrição |
+| `config.topology.name` | `config.topology.args` | Descrição |
 |---|---|---|
 | `'Line'` | `n` | Cadeia linear com `n` nós |
 | `'Ring'` | `n` | Anel com `n` nós |
@@ -133,13 +133,19 @@ Cria o grafo com uma das topologias prontas para uso. Após criar o grafo, inici
 Os nós são numerados de 0 a n-1.
 
 ```python
-net.set_ready_topology('Line', 5)    # 0 — 1 — 2 — 3 — 4
-net.set_ready_topology('Ring', 4)    # 0 — 1 — 2 — 3 — 0
-net.set_ready_topology('Grid', 3, 3) # grade 3×3
+net.config.topology.name = 'Line'
+net.config.topology.args = [5]
+net.set_ready_topology() # 0 — 1 — 2 — 3 — 4
+net.config.topology.name = 'Ring'
+net.config.topology.args = [4]
+net.set_ready_topology() # 0 — 1 — 2 — 3 — 0
+net.config.topology.name = 'Grid'
+net.config.topology.args = [3, 3]
+net.set_ready_topology() # grade 3×3
 ```
 
-- Levanta `TopologyError` para número incorreto de argumentos.
-- Levanta `ValueError` para nome de topologia desconhecido.
+- Levanta `TopologyError` se `config.topology` estiver inválido (nome ausente/desconhecido ou argumentos incorretos).
+- Levanta `TopologyError` se `set_ready_topology` receber argumentos diretamente.
 
 #### `add_host(host)`
 
@@ -221,7 +227,9 @@ from quantumnet.topology.network import Network
 
 clock = Clock()
 net = Network(clock=clock)
-net.set_ready_topology('Line', 5)
+net.config.topology.name = 'Line'
+net.config.topology.args = [5]
+net.set_ready_topology()
 
 # Acessar hosts e camadas
 print(net.get_host(0).info())
@@ -270,7 +278,7 @@ clock.run()
 
 | Método (`Network`) | O que faz |
 |---|---|
-| `set_ready_topology(nome, *args)` | Cria topologia pronta (Line, Ring, Grid) |
+| `set_ready_topology()` | Cria topologia pronta via `config.topology` |
 | `add_host(host)` | Adiciona host à rede |
 | `get_host(id)` | Retorna host pelo ID |
 | `get_eprs()` | Retorna todos os EPRs por aresta |

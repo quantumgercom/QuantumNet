@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -62,6 +63,36 @@ class CostsConfig:
 
 
 @dataclass
+class TopologyConfig:
+    """Optional topology inputs used by Network.set_ready_topology()."""
+    name: str | None = None
+    args: list[Any] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        raw_name = self.name
+        if isinstance(raw_name, bool):
+            # Allow topology.name: false in YAML to explicitly disable topology loading.
+            self.name = None if raw_name is False else str(raw_name)
+        elif raw_name is None:
+            self.name = None
+        else:
+            parsed_name = str(raw_name).strip()
+            if parsed_name.lower() in {"", "false", "none", "null", "off"}:
+                self.name = None
+            else:
+                self.name = parsed_name
+
+        if self.args is None:
+            raw_args = []
+        elif isinstance(self.args, (list, tuple)):
+            raw_args = list(self.args)
+        else:
+            raw_args = [self.args]
+
+        self.args = raw_args
+
+
+@dataclass
 class SimulationConfig:
     """Centralized simulation configuration.
 
@@ -85,6 +116,7 @@ class SimulationConfig:
     protocol: ProtocolConfig = field(default_factory=ProtocolConfig)
     defaults: DefaultsConfig = field(default_factory=DefaultsConfig)
     costs: CostsConfig = field(default_factory=CostsConfig)
+    topology: TopologyConfig = field(default_factory=TopologyConfig)
 
     @classmethod
     def from_yaml(cls, path: str) -> 'SimulationConfig':
@@ -101,11 +133,18 @@ class SimulationConfig:
         with open(path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f) or {}
 
-        return cls(
+        topology_data = data.get('topology', {})
+        if not isinstance(topology_data, dict):
+            topology_data = {}
+
+        cfg = cls(
             decoherence=DecoherenceConfig(**data.get('decoherence', {})),
             fidelity=FidelityConfig(**data.get('fidelity', {})),
             probability=ProbabilityConfig(**data.get('probability', {})),
             protocol=ProtocolConfig(**data.get('protocol', {})),
             defaults=DefaultsConfig(**data.get('defaults', {})),
             costs=CostsConfig(**data.get('costs', {})),
+            topology=TopologyConfig(**topology_data),
         )
+        cfg._source_path = Path(path).resolve()
+        return cfg

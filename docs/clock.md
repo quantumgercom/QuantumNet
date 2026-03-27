@@ -133,7 +133,9 @@ from quantumnet.topology.network import Network
 
 clock = Clock()
 net = Network(clock=clock)
-net.set_ready_topology('Line', 5)
+net.config.topology.name = 'Line'
+net.config.topology.args = [5]
+net.set_ready_topology()
 
 # opcional: ouvir eventos antes de rodar
 clock.on('epr_created', lambda c, **d: print(f"EPR criado: {d}"))
@@ -153,7 +155,9 @@ clock = Clock()
 net = Network(clock=clock)
 
 with MetricsCollector(clock, 'resultados.csv') as col:
-    net.set_ready_topology('Line', 5)
+    net.config.topology.name = 'Line'
+    net.config.topology.args = [5]
+    net.set_ready_topology()
     clock.run()
 # CSV gravado ao sair do bloco with
 ```

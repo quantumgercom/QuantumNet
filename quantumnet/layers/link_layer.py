@@ -97,7 +97,7 @@ class LinkLayer:
         )
 
     # ------------------------------------------------------------------ #
-    #  RF1 — Motor Probabilístico de Erro de Canal                       #
+    #  RF1 - Probabilistic Channel Error Engine                          #
     # ------------------------------------------------------------------ #
 
     def channel_error_engine(self, f1: float, f2: float, noise_type: str):
@@ -163,7 +163,7 @@ class LinkLayer:
             return False, None
 
     # ------------------------------------------------------------------ #
-    #  RF2 — Estratégias de Purificação Básicas                          #
+    #  RF2 - Basic Purification Strategies                               #
     # ------------------------------------------------------------------ #
 
     def _get_noise_type(self, alice_id: int, bob_id: int) -> str:
@@ -422,7 +422,7 @@ class LinkLayer:
         self._context.clock.schedule(cost, _run)
 
     # ------------------------------------------------------------------ #
-    #  RF3 — Agendador Híbrido (Controlador com Backup)                  #
+    #  RF3 - Hybrid Scheduler (Controller with Backup)                   #
     # ------------------------------------------------------------------ #
 
     def _estimate_initial_pairs(self, strategy: str, num_rounds: int) -> int:

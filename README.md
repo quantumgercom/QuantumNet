@@ -1,4 +1,4 @@
-﻿# QuantumNet
+# QuantumNet
 
 ## QuantumNet: Um Simulador de Redes Quânticas Baseado em Camadas
 
@@ -16,9 +16,10 @@ Este README está organizado da seguinte forma:
 4. Dependências e recursos de terceiros.
 5. Preocupações com segurança.
 6. Instalação (Docker e local).
-7. Teste mínimo de funcionamento.
-8. Experimentos para reprodução das reivindicações.
-9. Licença.
+7. Interface gráfica de configuração.
+8. Teste mínimo de funcionamento.
+9. Experimentos para reprodução das reivindicações.
+10. Licença.
 
 # Selos Considerados
 
@@ -160,6 +161,28 @@ pip install -r requirements.txt
 python3 seu_script.py
 ```
 
+# Interface gráfica de configuração (Streamlit)
+
+A interface gráfica permite editar o arquivo padrão `quantumnet/config/default_config.yaml` por meio de uma sidebar com as seções **Parâmetros** e **Versão**.
+
+## Rodar localmente
+
+```bash
+python -m quantumnet gui
+```
+
+## Rodar com Docker
+
+```bash
+docker compose run --rm --service-ports quantumnet python -m quantumnet gui --host 0.0.0.0 --port 8501
+```
+
+Depois, acesse:
+
+```text
+http://localhost:8501
+```
+
 # Teste mínimo
 
 Esta seção apresenta um passo a passo para validar a instalação e execução básica.
@@ -171,7 +194,9 @@ from quantumnet.topology import Network
 # Cria o relógio e a rede com topologia em linha de 3 nós
 clock = Clock()
 net = Network(clock=clock)
-net.set_ready_topology('Line', 3)
+net.config.topology.name = 'Line'
+net.config.topology.args = [3]
+net.set_ready_topology()
 
 # Verifica se a topologia foi criada
 assert len(list(net.nodes)) == 3, "Deveria haver 3 nós"

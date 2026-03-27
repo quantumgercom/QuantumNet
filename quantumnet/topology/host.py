@@ -3,9 +3,14 @@ from ..utils import Logger
 from ..quantum import Qubit
 
 class Host():
-    def __init__(self, host_id: int) -> None:
+    def __init__(self, host_id: int, name: str | None = None) -> None:
         # Network information
+        if not isinstance(host_id, int):
+            raise TypeError('Host ID must be an integer.')
         self._host_id = host_id
+        self._name = str(name).strip() if name is not None else str(host_id)
+        if not self._name:
+            self._name = str(host_id)
         self._connections = []
         # Host information
         self._memory = []
@@ -14,7 +19,12 @@ class Host():
         # Execution information
         self.logger = Logger.get_instance()
     def __str__(self):
-        return f'{self.host_id}'
+        return f'{self.name}'
+
+    @property
+    def id(self):
+        """Host ID (alias for host_id)."""
+        return self._host_id
 
     @property
     def host_id(self):
@@ -25,6 +35,16 @@ class Host():
             int: Host name.
         """
         return self._host_id
+
+    @property
+    def name(self):
+        """
+        Host display name.
+
+        Returns:
+            str: Host name.
+        """
+        return self._name
 
     @property
     def connections(self):
@@ -112,6 +132,7 @@ class Host():
 
         return {
             'host_id': self.host_id,
+            'name': self.name,
             'memory': len(self.memory),
             'routing_table': "No registration" if self.routing_table is None else self.routing_table
         }
