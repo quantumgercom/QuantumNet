@@ -77,19 +77,21 @@ cd QuantumNet
 docker compose build
 ```
 
-3. Inicie o container com shell Python interativo:
+3. Escolha uma opcao para iniciar o container:
+
+Opcao A - Shell Python interativo:
 
 ```bash
 docker compose run --rm quantumnet
 ```
 
-4. Para abrir terminal bash no container:
+Opcao B - Terminal bash:
 
 ```bash
 docker compose run --rm quantumnet bash
 ```
 
-5. Dentro do container, execute scripts:
+4. Apos entrar no container (por qualquer uma das opcoes), execute scripts:
 
 ```bash
 python3 seu_script.py
@@ -218,14 +220,15 @@ assert 'success' in resultado, "O callback da camada de enlace deveria ter sido 
 print("Todos os testes passaram! O simulador está funcionando.")
 ```
 
-Salve como `teste_rapido.py` e execute:
+Arquivo pronto no repositorio: `examples/teste_rapido.py`.
+Execute:
 
 ```bash
 # Localmente
-python3 teste_rapido.py
+python3 examples/teste_rapido.py
 
 # Com Docker
-docker compose run --rm quantumnet python3 teste_rapido.py
+docker compose run --rm quantumnet python3 examples/teste_rapido.py
 ```
 
 # Experimentos
@@ -262,6 +265,11 @@ Tempo esperado: 1 a 10 minutos, dependendo da topologia e da quantidade de opera
 Recursos esperados: aproximadamente 1 GB de RAM e baixo uso de disco.
 Resultado esperado: execução bem-sucedida de múltiplas requisições NEPR entre dois nós da topologia, com geração de métricas de sucesso/falha, fidelidade média dos pares distribuídos, eventos de aplicação registrados em CSV e visualizações que evidenciam efeitos da infraestrutura subjacente, como decoerência e regeneração de qubits.
 
+Exemplo de saida esperada para comparacao (figuras):
+
+![NEPR decoherence age](examples/img/nepr_decoherence_age.png)
+![NEPR qubit population](examples/img/nepr_qubit_population.png)
+
 ## Reivindicação #2 — Reprodução do agendamento de purificação na camada de enlace
 
 Esta reivindicação demonstra que o artefato permite reproduzir um cenário de purificação em canal ruidoso, evidenciando o comportamento do agendamento híbrido e seu efeito sobre a continuidade do processo e a fidelidade final do enlace.
@@ -292,6 +300,10 @@ Tempo esperado: 5 a 30 minutos, conforme o tamanho do cenário e o número de re
 Recursos esperados: 1 a 2 GB de RAM e baixo uso de disco para logs e arquivos auxiliares.
 Resultado esperado: saída textual detalhando o processo de purificação, incluindo provisionamento inicial, falhas probabilísticas, tentativas de recuperação e conclusão bem-sucedida do agendamento híbrido, com fidelidade final compatível com o cenário configurado.
 
+Exemplo de saida esperada para comparacao (figura):
+
+![Purification engine](examples/img/purification_engine.png)
+
 ## Reivindicação #3 — Reprodução do cenário de ataque a repetidores quânticos
 
 Esta reivindicação demonstra que o artefato permite reproduzir um cenário de ataque do tipo black hole repeater, evidenciando o impacto de um repetidor malicioso sobre a taxa de sucesso da comunicação quântica.
@@ -321,6 +333,11 @@ jupyter notebook
 Tempo esperado: 5 a 20 minutos, conforme os parâmetros do cenário.
 Recursos esperados: 1 a 2 GB de RAM e baixo uso de disco para saídas do experimento.
 Resultado esperado: geração de visualizações comparativas mostrando a diferença entre a rede íntegra e a rede com repetidor malicioso, bem como a degradação da taxa de sucesso à medida que aumenta a intensidade do ataque.
+
+Exemplo de saida esperada para comparacao (figuras):
+
+![Black hole comparacao](examples/img/black_hole_comparacao.png)
+![Black hole intensidade](examples/img/black_hole_intensidade.png)
 
 ## Reivindicação #4 — Uso da interface gráfica para configuração e validação da topologia padrão
 
@@ -355,6 +372,29 @@ jupyter notebook
 Tempo esperado: 1 a 10 minutos.
 Recursos esperados: aproximadamente 1 GB de RAM e baixo uso de disco.
 Resultado esperado: carregamento bem-sucedido dos arquivos padrão de configuração (`default_config.yaml`) e topologia (`default_topology.json`), com criação da rede sem erros e confirmação dos parâmetros aplicados.
+
+Exemplo de saida esperada para comparacao (trecho textual do notebook):
+
+```text
+Config: .../quantumnet/config/default_config.yaml
+Topology JSON: .../quantumnet/config/default_topology.json
+Config exists? True
+Topology exists? True
+
+Topology name: Json
+Topology arg: ['default_topology.json']
+Nodes: [0, 1, 2, 3, 4]
+Edges: [(0, 3), (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4)]
+```
+
+Exemplo adicional de saida textual (roteamento):
+
+```text
+Routing table por host:
+
+Host 0 (0)
+{0: [0], 3: [0, 3], 1: [0, 3, 1], 2: [0, 3, 2], 4: [0, 3, 4]}
+```
 
 # Organização do repositório
 
